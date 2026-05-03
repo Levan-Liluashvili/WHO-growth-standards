@@ -168,19 +168,24 @@
         });
     }
     
+// Function to update BMI in real-time
 function updateBMI() {
     const weight = parseFloat(document.getElementById('weight').value);
     const height = parseFloat(document.getElementById('height').value);
     const display = document.getElementById('bmiDisplay');
 
     if (!isNaN(weight) && !isNaN(height) && height > 0) {
+        // Standard formula: kg / (m^2)
         const bmi = weight / Math.pow(height / 100, 2);
-        // This line now only shows "BMI" and the number
-        display.innerText = `BMI ${bmi.toFixed(2)}`; 
+        display.innerText = `BMI: ${bmi.toFixed(2)}`;
     } else {
-        display.innerText = ""; 
+        display.innerText = `BMI: `;
     }
 }
+
+// Attach the function to the input fields
+document.getElementById('weight').addEventListener('input', updateBMI);
+document.getElementById('height').addEventListener('input', updateBMI);
     
 </script>
 </body>
