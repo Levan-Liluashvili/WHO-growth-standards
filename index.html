@@ -69,7 +69,6 @@
             </select>
         </div>
     </div>
-
     <div class="row">
         <div>
             <label>Weight (kg)</label>
@@ -79,9 +78,15 @@
             <label>Height/Length (cm)</label>
             <input type="number" id="height" step="0.1" placeholder="e.g. 85.5">
         </div>
+    </div>
 
+    <!-- BMI appears on its own line centered -->
+    <div id="bmiDisplay" style="margin-top: 15px; text-align: center; font-weight: bold; color: #0056b3; min-height: 1.2em;"></div>
+
+    <!-- Button takes full width -->
     <button onclick="calculate()">Calculate Z-Score</button>
 
+    <!-- Results appear at the bottom across the full width -->
     <div id="result">Waiting for input...</div>
 </div>
 
