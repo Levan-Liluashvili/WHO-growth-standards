@@ -142,38 +142,46 @@
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML = ""; 
 
-        // 4. Loop through all indicators
-        for (const ind of indicatorConfig) {
+// 4. Create an array of Promises to fetch all data first
+        const promises = indicatorConfig.map(ind => {
             const isWeightRelated = (ind.id !== 'hfa');
 
-            // Handle Missing Data or Oedema
+            // Return NA immediately if data is missing or Oedema is present
             if (isNaN(ind.val) || (oedema === 'y' && isWeightRelated)) {
-                appendResultRow(ind.name, "NA", "NA");
-                continue; 
+                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
             }
 
-            // 5. CSV Lookup
-            const fileName = `data/${ind.id}_${sex}_0_5.csv`;
-            Papa.parse(fileName, {
-                download: true,
-                header: true,
-                dynamicTyping: true,
-                complete: function(results) {
-                    const data = results.data.filter(row => row.L !== undefined);
-                    const lookupCol = (ind.id === 'wfh') ? 'Centimeters' : 'Day';
-                    const target = (ind.id === 'wfh') ? clenhei : ageDays;
+            return new Promise((resolve) => {
+                const fileName = `data/${ind.id}_${sex}_0_5.csv`;
+                Papa.parse(fileName, {
+                    download: true,
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        const data = results.data.filter(row => row.L !== undefined);
+                        const lookupCol = (ind.id === 'wfh') ? 'Centimeters' : 'Day';
+                        const target = (ind.id === 'wfh') ? clenhei : ageDays;
 
-                    const match = data.reduce((prev, curr) => 
-                        (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
-                    );
+                        const match = data.reduce((prev, curr) => 
+                            (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
+                        );
 
-                    // --- LMS Formula and Percentile Calculation ---
-                    const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
-                    const percentile = zToPercentile(zScore); 
-                    
-                    appendResultRow(ind.name, zScore.toFixed(2), percentile);
-                }
+                        const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
+                        const percentile = zToPercentile(zScore);
+                        
+                        resolve({ name: ind.name, score: zScore.toFixed(2), percentile: percentile });
+                    }
+                });
             });
+        });
+
+        // 5. Wait for all files and then display in order
+        Promise.all(promises).then(results => {
+            resultsBody.innerHTML = ""; // Clear one last time
+            results.forEach(res => {
+                appendResultRow(res.name, res.score, res.percentile);
+            });
+        });
         }
     }
 
