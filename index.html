@@ -80,12 +80,13 @@
 
 <div id="result" style="margin-top: 25px; padding: 20px; border-radius: 8px; background: #f8f9fa; border-left: 6px solid #007bff;">
     <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="border-bottom: 2px solid #dee2e6; text-align: left;">
-                <th style="padding: 8px;">Indicator</th>
-                <th style="padding: 8px;">Z-Score</th>
-            </tr>
-        </thead>
+<thead>
+    <tr style="border-bottom: 2px solid #dee2e6; text-align: left;">
+        <th style="padding: 8px;">Indicator</th>
+        <th style="padding: 8px;">Z-Score</th>
+        <th style="padding: 8px;">Percentile</th>
+    </tr>
+</thead>
         <tbody id="multi-results">
             <tr><td colspan="2" style="padding: 10px; color: #666;">Waiting for input...</td></tr>
         </tbody>
@@ -117,13 +118,14 @@
         let correctionNote = "";
         
         if (ageDays < 731 && measure === 'H') {
-            clenhei += 0.7; // Converting standing height to recumbent length
+            clenhei += 0.7; 
             correctionNote = "(+0.7cm correction applied)";
         } else if (ageDays >= 731 && measure === 'L') {
-            clenhei -= 0.7; // Converting recumbent length to standing height
+            clenhei -= 0.7; 
             correctionNote = "(-0.7cm correction applied)";
-}
-// 3. Prepare Multi-Indicator Configuration
+        }
+
+        // 3. Prepare Multi-Indicator Configuration
         const indicatorConfig = [
             { id: 'hfa', name: 'Height-for-age', val: clenhei },
             { id: 'wfa', name: 'Weight-for-age', val: weight },
@@ -131,7 +133,7 @@
             { id: 'wfh', name: 'Weight-for-height', val: weight }
         ];
 
-        // Clear the results table before starting
+        // Clear the results table
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML = ""; 
 
@@ -141,7 +143,7 @@
 
             // Handle Missing Data or Oedema
             if (isNaN(ind.val) || (oedema === 'y' && isWeightRelated)) {
-                appendResultRow(ind.name, "NA");
+                appendResultRow(ind.name, "NA", "NA");
                 continue; 
             }
 
@@ -160,43 +162,53 @@
                         (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
                     );
 
+                    // --- LMS Formula and Percentile Calculation ---
                     const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
-                    appendResultRow(ind.name, zScore.toFixed(2));
+                    const percentile = zToPercentile(zScore); 
+                    
+                    appendResultRow(ind.name, zScore.toFixed(2), percentile);
                 }
             });
         }
-    } // End of calculate function
+    }
 
-    // Helper function to update the table[cite: 1]
-    function appendResultRow(name, score) {
+    // Helper function to update the table with 3 columns
+    function appendResultRow(name, score, percentile) {
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML += `
             <tr style="border-bottom: 1px solid #eee;">
                 <td style="padding: 8px;">${name}</td>
                 <td style="padding: 8px; font-weight: bold; color: ${score === 'NA' ? '#dc3545' : '#0056b3'};">${score}</td>
+                <td style="padding: 8px; color: #666;">${percentile}</td>
             </tr>`;
     }
 
-    // Real-time BMI calculation function
+    // Real-time BMI display
     function updateBMI() {
         const weight = parseFloat(document.getElementById('weight').value);
         const height = parseFloat(document.getElementById('height').value);
         const display = document.getElementById('bmiDisplay');
-
         if (!isNaN(weight) && !isNaN(height) && height > 0) {
             const bmi = weight / Math.pow(height / 100, 2);
-            // Displays only the word BMI and the number
             display.innerText = `BMI ${bmi.toFixed(2)}`;
         } else {
-            // Keeps the area hidden if inputs are empty
             display.innerText = "";
         }
     }
 
-    // Event listeners to detect typing
     document.getElementById('weight').addEventListener('input', updateBMI);
     document.getElementById('height').addEventListener('input', updateBMI);
 
+    // Math function for Percentiles
+    function zToPercentile(z) {
+        if (z === "NA" || isNaN(z)) return "NA";
+        const t = 1 / (1 + 0.2316419 * Math.abs(z));
+        const d = 0.3989423 * Math.exp(-z * z / 2);
+        let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+        if (z > 0) p = 1 - p;
+        return (p * 100).toFixed(1) + "th";
+    }
+    
 </script>
 </body>
 </html>
