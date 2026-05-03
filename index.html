@@ -4,81 +4,159 @@
     <meta charset="UTF-8">
     <title>WHO Child Growth Standards Calculator</title>
     <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; line-height: 1.6; }
-        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; background: #f9f9f9; }
-        label { display: block; margin-top: 10px; font-weight: bold; }
-        input, select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
-        button { background: #007bff; color: white; border: none; padding: 10px 20px; margin-top: 20px; cursor: pointer; border-radius: 4px; }
-        #result { margin-top: 20px; font-size: 1.2em; font-weight: bold; color: #2c3e50; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; color: #333; }
+        .card { border: 1px solid #e0e0e0; padding: 30px; border-radius: 12px; background: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; color: #0056b3; }
+        label { display: block; margin-top: 15px; font-weight: 600; font-size: 0.9em; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        .row { display: flex; gap: 15px; }
+        .row div { flex: 1; }
+        button { background: #007bff; color: white; border: none; padding: 12px; width: 100%; margin-top: 25px; cursor: pointer; border-radius: 6px; font-size: 1em; font-weight: bold; transition: background 0.3s; }
+        button:hover { background: #0056b3; }
+        #result { margin-top: 25px; padding: 15px; border-radius: 6px; background: #f8f9fa; text-align: center; font-size: 1.2em; font-weight: bold; border-left: 5px solid #007bff; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>Growth Standards Calculator</h2>
-    <p><small>Based on WHO Expanded LMS Tables</small></p>
+    <h2>Growth Calculator</h2>
+    <p><small>Official WHO Expanded LMS Methodology</small></p>
 
-    <label>Sex</label>
-    <select id="sex">
-        <option value="boys">Boy</option>
-        <option value="girls">Girl</option>
-    </select>
+    <div class="row">
+        <div>
+            <label>Sex</label>
+            <select id="sex">
+                <option value="boys">Boy</option>
+                <option value="girls">Girl</option>
+            </select>
+        </div>
+        <div>
+            <label>Indicator</label>
+            <select id="indicator" onchange="toggleInputs()">
+                <option value="bmi">BMI-for-age</option>
+                <option value="hfa">Height-for-age</option>
+                <option value="wfa">Weight-for-age</option>
+                <option value="wfh">Weight-for-height</option>
+            </select>
+        </div>
+    </div>
 
-    <label>Indicator</label>
-    <select id="indicator">
-        <option value="bmi">BMI-for-age</option>
-        <option value="hfa">Height-for-age</option>
-        <option value="wfa">Weight-for-age</option>
-        <option value="wfh">Weight-for-height</option>
-    </select>
+    <div class="row">
+        <div>
+            <label>Date of Birth</label>
+            <input type="date" id="dob">
+        </div>
+        <div>
+            <label>Date of Measurement</label>
+            <input type="date" id="dom" value="">
+        </div>
+    </div>
 
-    <label id="ageLabel">Age (Months)</label>
-    <input type="number" id="ageInput" step="0.1" placeholder="e.g. 24">
+    <div id="weightSection">
+        <label>Weight (kg)</label>
+        <input type="number" id="weight" step="0.01" placeholder="e.g. 12.5">
+    </div>
 
-    <label id="valLabel">Value (BMI / cm / kg)</label>
-    <input type="number" id="valInput" step="0.01">
+    <div id="heightSection">
+        <label id="heightLabel">Height/Length (cm)</label>
+        <input type="number" id="height" step="0.1" placeholder="e.g. 85.0">
+    </div>
 
     <button onclick="calculate()">Calculate Z-Score</button>
 
-    <div id="result"></div>
+    <div id="result">Enter data to see results</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
-    const DAYS_CONVERSION = 30.4375; // WHO Standard
+    // Set default date of measurement to today
+    document.getElementById('dom').valueAsDate = new Date();
+
+    function toggleInputs() {
+        const ind = document.getElementById('indicator').value;
+        const weightSection = document.getElementById('weightSection');
+        const heightSection = document.getElementById('heightSection');
+
+        // Reset visibility
+        weightSection.classList.remove('hidden');
+        heightSection.classList.remove('hidden');
+
+        if (ind === 'hfa') weightSection.classList.add('hidden');
+        if (ind === 'wfa') heightSection.classList.add('hidden');
+    }
 
     async function calculate() {
         const sex = document.getElementById('sex').value;
         const ind = document.getElementById('indicator').value;
-        const ageMonths = parseFloat(document.getElementById('ageInput').value);
-        const userVal = parseFloat(document.getElementById('valInput').value);
-        
-        const ageDays = Math.round(ageMonths * DAYS_CONVERSION);
-        
-        // Determine file path based on WHO 2-year discontinuity rule
+        const dob = new Date(document.getElementById('dob').value);
+        const dom = new Date(document.getElementById('dom').value);
+        const weight = parseFloat(document.getElementById('weight').value);
+        const height = parseFloat(document.getElementById('height').value);
+
+        if (isNaN(dob) || isNaN(dom)) {
+            alert("Please enter valid dates.");
+            return;
+        }
+
+        // 1. Calculate Age in Days
+        const diffTime = dom - dob;
+        const ageDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        if (ageDays < 0) {
+            alert("Date of measurement cannot be before date of birth.");
+            return;
+        }
+
+        // 2. Prepare Value for Z-score (y)
+        let y;
+        if (ind === 'bmi') {
+            const heightMeters = height / 100;
+            y = weight / (heightMeters * heightMeters);
+        } else if (ind === 'wfa' || ind === 'wfh') {
+            y = weight;
+        } else if (ind === 'hfa') {
+            y = height;
+        }
+
+        // 3. Select correct file
         let fileName = `data/${ind}_${sex}_0_5.csv`;
-        
+
         Papa.parse(fileName, {
             download: true,
             header: true,
             dynamicTyping: true,
             complete: function(results) {
-                const data = results.data;
-                // Find closest match in the 'Day' or 'Centimeters' column
+                const data = results.data.filter(row => row.L !== undefined); // Remove empty rows
                 const lookupCol = (ind === 'wfh') ? 'Centimeters' : 'Day';
+                const targetValue = (ind === 'wfh') ? height : ageDays;
+
+                // Find closest match in the table
                 const match = data.reduce((prev, curr) => {
-                    return (Math.abs(curr[lookupCol] - (ind === 'wfh' ? userVal : ageDays)) < Math.abs(prev[lookupCol] - (ind === 'wfh' ? userVal : ageDays)) ? curr : prev);
+                    return (Math.abs(curr[lookupCol] - targetValue) < Math.abs(prev[lookupCol] - targetValue) ? curr : prev);
                 });
 
                 if (match) {
                     const { L, M, S } = match;
-                    // LMS Formula
-                    const zScore = (Math.pow((userVal / M), L) - 1) / (L * S);
-                    document.getElementById('result').innerText = `Z-Score: ${zScore.toFixed(2)}`;
+                    // LMS Formula: Z = [((y/M)^L) - 1] / (L * S)
+                    const zScore = (Math.pow((y / M), L) - 1) / (L * S);
+                    
+                    let resultText = `Z-Score: ${zScore.toFixed(2)}`;
+                    if (ind === 'bmi') resultText += `<br><small>Calculated BMI: ${y.toFixed(2)}</small>`;
+                    
+                    document.getElementById('result').innerHTML = resultText;
+                } else {
+                    document.getElementById('result').innerText = "Data point outside of table range.";
                 }
+            },
+            error: function() {
+                document.getElementById('result').innerText = "Error: Could not find CSV file.";
             }
         });
     }
+    
+    // Run toggle on load
+    toggleInputs();
 </script>
 
 </body>
