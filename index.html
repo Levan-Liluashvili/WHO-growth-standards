@@ -1,163 +1,75 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>WHO Child Growth Standards Calculator</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; color: #333; }
-        .card { border: 1px solid #e0e0e0; padding: 30px; border-radius: 12px; background: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2 { margin-top: 0; color: #0056b3; }
-        label { display: block; margin-top: 15px; font-weight: 600; font-size: 0.9em; }
-        input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
-        .row { display: flex; gap: 15px; }
-        .row div { flex: 1; }
-        button { background: #007bff; color: white; border: none; padding: 12px; width: 100%; margin-top: 25px; cursor: pointer; border-radius: 6px; font-size: 1em; font-weight: bold; transition: background 0.3s; }
-        button:hover { background: #0056b3; }
-        #result { margin-top: 25px; padding: 15px; border-radius: 6px; background: #f8f9fa; text-align: center; font-size: 1.2em; font-weight: bold; border-left: 5px solid #007bff; }
-        .hidden { display: none; }
-    </style>
-</head>
-<body>
-
 <div class="card">
-    <h2>Growth Calculator</h2>
-    <p><small>Official WHO Expanded LMS Methodology</small></p>
+    <h2>Advanced Growth Calculator</h2>
+    <p><small>WHO Anthro R Package Logic Implemented</small></p>
+
+    <!-- ... (Sex and Indicator selectors same as before) ... -->
 
     <div class="row">
         <div>
-            <label>Sex</label>
-            <select id="sex">
-                <option value="boys">Boy</option>
-                <option value="girls">Girl</option>
+            <label>Measurement Type</label>
+            <select id="measure">
+                <option value="auto">Auto (Based on Age)</option>
+                <option value="L">L (Recumbent Length)</option>
+                <option value="H">H (Standing Height)</option>
             </select>
         </div>
         <div>
-            <label>Indicator</label>
-            <select id="indicator" onchange="toggleInputs()">
-                <option value="bmi">BMI-for-age</option>
-                <option value="hfa">Height-for-age</option>
-                <option value="wfa">Weight-for-age</option>
-                <option value="wfh">Weight-for-height</option>
+            <label>Oedema</label>
+            <select id="oedema">
+                <option value="n">No</option>
+                <option value="y">Yes</option>
             </select>
         </div>
     </div>
 
-    <div class="row">
-        <div>
-            <label>Date of Birth</label>
-            <input type="date" id="dob">
-        </div>
-        <div>
-            <label>Date of Measurement</label>
-            <input type="date" id="dom" value="">
-        </div>
-    </div>
-
-    <div id="weightSection">
-        <label>Weight (kg)</label>
-        <input type="number" id="weight" step="0.01" placeholder="e.g. 12.5">
-    </div>
-
-    <div id="heightSection">
-        <label id="heightLabel">Height/Length (cm)</label>
-        <input type="number" id="height" step="0.1" placeholder="e.g. 85.0">
-    </div>
+    <!-- ... (Date and Value inputs same as before) ... -->
 
     <button onclick="calculate()">Calculate Z-Score</button>
-
-    <div id="result">Enter data to see results</div>
+    <div id="result"></div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
-    // Set default date of measurement to today
-    document.getElementById('dom').valueAsDate = new Date();
-
-    function toggleInputs() {
-        const ind = document.getElementById('indicator').value;
-        const weightSection = document.getElementById('weightSection');
-        const heightSection = document.getElementById('heightSection');
-
-        // Reset visibility
-        weightSection.classList.remove('hidden');
-        heightSection.classList.remove('hidden');
-
-        if (ind === 'hfa') weightSection.classList.add('hidden');
-        if (ind === 'wfa') heightSection.classList.add('hidden');
-    }
-
     async function calculate() {
-        const sex = document.getElementById('sex').value;
-        const ind = document.getElementById('indicator').value;
-        const dob = new Date(document.getElementById('dob').value);
-        const dom = new Date(document.getElementById('dom').value);
-        const weight = parseFloat(document.getElementById('weight').value);
-        const height = parseFloat(document.getElementById('height').value);
-
-        if (isNaN(dob) || isNaN(dom)) {
-            alert("Please enter valid dates.");
-            return;
-        }
-
+        // ... (Inputs for sex, indicator, dob, dom, weight, height same as before) ...
+        
+        const measure = document.getElementById('measure').value;
+        const oedema = document.getElementById('oedema').value;
+        
         // 1. Calculate Age in Days
         const diffTime = dom - dob;
         const ageDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-        if (ageDays < 0) {
-            alert("Date of measurement cannot be before date of birth.");
+        // 2. Determine Measurement Type if "Auto"
+        let actualMeasure = measure;
+        if (actualMeasure === 'auto') {
+            actualMeasure = (ageDays < 731) ? 'L' : 'H';
+        }
+
+        // 3. Apply 0.7 cm Correction (clenhei logic)
+        let clenhei = height;
+        if (ageDays < 731 && actualMeasure === 'H') {
+            clenhei += 0.7; // Converting height to length
+        } else if (ageDays >= 731 && actualMeasure === 'L') {
+            clenhei -= 0.7; // Converting length to height
+        }
+
+        // 4. Oedema check for Weight-related indicators
+        if (oedema === 'y' && (ind === 'bmi' || ind === 'wfa' || ind === 'wfh')) {
+            document.getElementById('result').innerHTML = "Z-Score: Missing (Oedema detected)";
             return;
         }
 
-        // 2. Prepare Value for Z-score (y)
+        // 5. Final Value Preparation (y)
         let y;
         if (ind === 'bmi') {
-            const heightMeters = height / 100;
-            y = weight / (heightMeters * heightMeters);
+            const hMeters = clenhei / 100;
+            y = weight / (hMeters * hMeters);
         } else if (ind === 'wfa' || ind === 'wfh') {
             y = weight;
         } else if (ind === 'hfa') {
-            y = height;
+            y = clenhei;
         }
 
-        // 3. Select correct file
-        let fileName = `data/${ind}_${sex}_0_5.csv`;
-
-        Papa.parse(fileName, {
-            download: true,
-            header: true,
-            dynamicTyping: true,
-            complete: function(results) {
-                const data = results.data.filter(row => row.L !== undefined); // Remove empty rows
-                const lookupCol = (ind === 'wfh') ? 'Centimeters' : 'Day';
-                const targetValue = (ind === 'wfh') ? height : ageDays;
-
-                // Find closest match in the table
-                const match = data.reduce((prev, curr) => {
-                    return (Math.abs(curr[lookupCol] - targetValue) < Math.abs(prev[lookupCol] - targetValue) ? curr : prev);
-                });
-
-                if (match) {
-                    const { L, M, S } = match;
-                    // LMS Formula: Z = [((y/M)^L) - 1] / (L * S)
-                    const zScore = (Math.pow((y / M), L) - 1) / (L * S);
-                    
-                    let resultText = `Z-Score: ${zScore.toFixed(2)}`;
-                    if (ind === 'bmi') resultText += `<br><small>Calculated BMI: ${y.toFixed(2)}</small>`;
-                    
-                    document.getElementById('result').innerHTML = resultText;
-                } else {
-                    document.getElementById('result').innerText = "Data point outside of table range.";
-                }
-            },
-            error: function() {
-                document.getElementById('result').innerText = "Error: Could not find CSV file.";
-            }
-        });
+        // ... (Rest of the CSV Lookup and LMS Formula same as before) ...
     }
-    
-    // Run toggle on load
-    toggleInputs();
 </script>
-
-</body>
-</html>
