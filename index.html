@@ -54,14 +54,13 @@
     </div>
 
     <div class="row">
-        <div>
-            <label>Measurement Type</label>
-            <select id="measure">
-                <option value="auto">Auto (Age-based)</option>
-                <option value="L">L (Recumbent Length)</option>
-                <option value="H">H (Standing Height)</option>
-            </select>
-        </div>
+<div>
+    <label>Measurement Type</label>
+    <select id="measure">
+        <option value="H" selected>H (Standing Height)</option>
+        <option value="L">L (Recumbent Length)</option>
+    </select>
+</div>
         <div>
             <label>Oedema</label>
             <select id="oedema">
@@ -108,10 +107,6 @@
         if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
 
         // 2. clenhei Logic (Anthro R Package Standard)
-        let actualMeasure = measure;
-        if (actualMeasure === 'auto') {
-            actualMeasure = (ageDays < 731) ? 'L' : 'H';
-        }
 
         let clenhei = height;
         let correctionNote = "";
