@@ -107,16 +107,17 @@
         if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
 
         // 2. clenhei Logic (Anthro R Package Standard)
-
+        // We use the selected 'measure' directly since 'auto' is removed
         let clenhei = height;
         let correctionNote = "";
-        if (ageDays < 731 && actualMeasure === 'H') {
-            clenhei += 0.7;
+        
+        if (ageDays < 731 && measure === 'H') {
+            clenhei += 0.7; // Converting standing height to recumbent length
             correctionNote = "(+0.7cm correction applied)";
-        } else if (ageDays >= 731 && actualMeasure === 'L') {
-            clenhei -= 0.7;
+        } else if (ageDays >= 731 && measure === 'L') {
+            clenhei -= 0.7; // Converting recumbent length to standing height
             correctionNote = "(-0.7cm correction applied)";
-        }
+}
 
         // 3. Oedema Handling
         const isWeightRelated = (ind === 'bmi' || ind === 'wfa' || ind === 'wfh');
