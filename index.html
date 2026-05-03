@@ -101,10 +101,11 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
-    // Restore default measurement date to today
+    // 1. Set default measurement date immediately on load
     document.getElementById('dom').valueAsDate = new Date();
 
     async function calculate() {
+        // Get Input Values
         const sex = document.getElementById('sex').value;
         const dob = new Date(document.getElementById('dob').value);
         const dom = new Date(document.getElementById('dom').value);
@@ -113,6 +114,7 @@
         const measure = document.getElementById('measure').value;
         const oedema = document.getElementById('oedema').value;
 
+        // Basic Validation
         if (isNaN(dob) || isNaN(dom)) { 
             alert("Please enter valid dates."); 
             return; 
@@ -124,6 +126,7 @@
             return; 
         }
 
+        // 2. clenhei Logic (WHO Anthro Standard)
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') {
             clenhei += 0.7; 
@@ -131,7 +134,7 @@
             clenhei -= 0.7; 
         }
 
-        // 1. Define Fixed Order: BMI, then Height, then Weight
+        // 3. Define Fixed Order: BMI, then Height, then Weight
         const indicatorConfig = [
             { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei)) ? (weight / Math.pow(clenhei / 100, 2)) : NaN },
             { id: 'hfa', name: 'Height-for-age', val: clenhei },
@@ -142,10 +145,11 @@
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
 
-        // 2. Create Promises for each indicator to ensure they wait for CSV loading
+        // 4. Create Promises to fetch all CSVs in parallel
         const promises = indicatorConfig.map(ind => {
             const isWeightRelated = (ind.id !== 'hfa');
 
+            // Handle Missing Data or Oedema (Anthro R Logic)
             if (isNaN(ind.val) || (oedema === 'y' && isWeightRelated)) {
                 return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
             }
@@ -165,8 +169,11 @@
                             (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
                         );
 
+                        // LMS Formula
                         const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
-                        const percentile = zToPercentile(zScore);
+                        
+                        // Pass ind.id to handle flagging logic
+                        const percentile = zToPercentile(zScore, ind.id);
                         
                         resolve({ name: ind.name, score: zScore.toFixed(2), percentile: percentile });
                     },
@@ -177,7 +184,7 @@
             });
         });
 
-        // 3. Wait for all calculations and display them in the defined order
+        // 5. Render results in the specific order
         Promise.all(promises).then(orderedResults => {
             resultsBody.innerHTML = ""; 
             orderedResults.forEach(res => {
@@ -196,6 +203,7 @@
             </tr>`;
     }
 
+    // Real-time BMI display
     function updateBMI() {
         const weight = parseFloat(document.getElementById('weight').value);
         const height = parseFloat(document.getElementById('height').value);
@@ -211,27 +219,25 @@
     document.getElementById('weight').addEventListener('input', updateBMI);
     document.getElementById('height').addEventListener('input', updateBMI);
 
-function zToPercentile(z, indicatorId) {
-    if (z === "NA" || isNaN(z)) return "NA";
-    
-    // Add WHO Anthro Flagging Logic (Example for Height-for-age)
-    if (indicatorId === 'hfa' && (z > 6 || z < -6)) return "NA (Flagged)";
-    if (indicatorId === 'wfa' && (z > 5 || z < -6)) return "NA (Flagged)";
-    if (indicatorId === 'bmi' && (z > 5 || z < -5)) return "NA (Flagged)";
+    // Percentile Function with Anthro Flagging Limits
+    function zToPercentile(z, id) {
+        if (z === "NA" || isNaN(z)) return "NA";
+        
+        // Apply WHO Anthro Flagging (Exclusion) Rules
+        if (id === 'hfa' && (z > 6 || z < -6)) return "NA (Flag)";
+        if (id === 'wfa' && (z > 5 || z < -6)) return "NA (Flag)";
+        if (id === 'wfh' && (z > 5 || z < -5)) return "NA (Flag)";
+        if (id === 'bmi' && (z > 5 || z < -5)) return "NA (Flag)";
 
-    const t = 1 / (1 + 0.2316419 * Math.abs(z));
-    const d = 0.3989423 * Math.exp(-z * z / 2);
-    let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
-    
-    if (z > 0) p = 1 - p;
-    
-    // Safety check to avoid "100th"
-    let pct = p * 100;
-    if (pct > 99.9) return ">99.9th";
-    if (pct < 0.1) return "<0.1st";
-    
-    return pct.toFixed(1) + "th";
-}
+        const t = 1 / (1 + 0.2316419 * Math.abs(z));
+        const d = 0.3989423 * Math.exp(-z * z / 2);
+        let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+        if (z > 0) p = 1 - p;
+        
+        let pct = p * 100;
+        if (pct > 99.9) return ">99.9th";
+        if (pct < 0.1) return "<0.1st";
+        return pct.toFixed(1) + "th";
     }
 </script>
 </body>
