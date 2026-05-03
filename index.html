@@ -81,6 +81,10 @@
         </div>
     </div>
 
+    <div id="bmiDisplay" style="margin-top: 10px; font-weight: bold; color: #0056b3;">
+    BMI: --
+</div>
+
     <button onclick="calculate()">Calculate Z-Score</button>
 
     <div id="result">Waiting for input...</div>
@@ -164,6 +168,25 @@
             }
         });
     }
+// Function to update BMI in real-time
+function updateBMI() {
+    const weight = parseFloat(document.getElementById('weight').value);
+    const height = parseFloat(document.getElementById('height').value);
+    const display = document.getElementById('bmiDisplay');
+
+    if (!isNaN(weight) && !isNaN(height) && height > 0) {
+        // Standard formula: kg / (m^2)
+        const bmi = weight / Math.pow(height / 100, 2);
+        display.innerText = `Standard BMI: ${bmi.toFixed(2)} kg/m²`;
+    } else {
+        display.innerText = `Standard BMI: --`;
+    }
+}
+
+// Attach the function to the input fields
+document.getElementById('weight').addEventListener('input', updateBMI);
+document.getElementById('height').addEventListener('input', updateBMI);
+    
 </script>
 </body>
 </html>
