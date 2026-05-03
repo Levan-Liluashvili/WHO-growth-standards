@@ -219,25 +219,26 @@
     document.getElementById('weight').addEventListener('input', updateBMI);
     document.getElementById('height').addEventListener('input', updateBMI);
 
-    // Percentile Function with Anthro Flagging Limits
-    function zToPercentile(z, id) {
-        if (z === "NA" || isNaN(z)) return "NA";
-        
-        // Apply WHO Anthro Flagging (Exclusion) Rules
-        if (id === 'hfa' && (z > 6 || z < -6)) return "NA (Flag)";
-        if (id === 'wfa' && (z > 5 || z < -6)) return "NA (Flag)";
-        if (id === 'wfh' && (z > 5 || z < -5)) return "NA (Flag)";
-        if (id === 'bmi' && (z > 5 || z < -5)) return "NA (Flag)";
+function zToPercentile(z, id) {
+    if (z === "NA" || isNaN(z)) return "NA";
+    
+    // 1. AnthroPlus Exclusion Logic: If it's this rare, show NA, not the percentile
+    if (id === 'hfa' && (z > 6 || z < -6)) return "NA";
+    if (id === 'wfa' && (z > 5 || z < -6)) return "NA";
+    if (id === 'wfh' && (z > 5 || z < -5)) return "NA";
+    if (id === 'bmi' && (z > 5 || z < -5)) return "NA";
 
-        const t = 1 / (1 + 0.2316419 * Math.abs(z));
-        const d = 0.3989423 * Math.exp(-z * z / 2);
-        let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
-        if (z > 0) p = 1 - p;
-        
-        let pct = p * 100;
-        if (pct > 99.9) return ">99.9th";
-        if (pct < 0.1) return "<0.1st";
-        return pct.toFixed(1) + "th";
+    // 2. Standard Math for valid ranges
+    const t = 1 / (1 + 0.2316419 * Math.abs(z));
+    const d = 0.3989423 * Math.exp(-z * z / 2);
+    let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    if (z > 0) p = 1 - p;
+    
+    let pct = p * 100;
+
+    // 3. Clinical Rounding: AnthroPlus typically rounds to 1 decimal
+    // If it's very close to the edge but not flagged, show the decimal.
+    return pct.toFixed(1) + "th";
     }
 </script>
 </body>
