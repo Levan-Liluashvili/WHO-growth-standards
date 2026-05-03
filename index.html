@@ -1,14 +1,63 @@
-<div class="card">
-    <h2>Advanced Growth Calculator</h2>
-    <p><small>WHO Anthro R Package Logic Implemented</small></p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WHO Anthro-Aligned Calculator</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; max-width: 650px; margin: 40px auto; padding: 20px; background-color: #f4f7f9; }
+        .card { border: 1px solid #e0e0e0; padding: 30px; border-radius: 12px; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h2 { color: #0056b3; margin-top: 0; }
+        .row { display: flex; gap: 15px; margin-bottom: 15px; }
+        .row div { flex: 1; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.85em; color: #555; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; padding: 14px; width: 100%; margin-top: 20px; cursor: pointer; border-radius: 6px; font-size: 1em; font-weight: bold; }
+        button:hover { background: #0056b3; }
+        #result { margin-top: 25px; padding: 20px; border-radius: 8px; background: #e9ecef; font-size: 1.1em; line-height: 1.6; border-left: 6px solid #007bff; }
+        .missing { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
 
-    <!-- ... (Sex and Indicator selectors same as before) ... -->
+<div class="card">
+    <h2>Growth Standards Calculator</h2>
+    <p><small>Implementing WHO Anthro R Logic (clenhei & oedema)</small></p>
+
+    <div class="row">
+        <div>
+            <label>Sex</label>
+            <select id="sex">
+                <option value="boys">Boy</option>
+                <option value="girls">Girl</option>
+            </select>
+        </div>
+        <div>
+            <label>Indicator</label>
+            <select id="indicator">
+                <option value="bmi">BMI-for-age</option>
+                <option value="hfa">Height-for-age</option>
+                <option value="wfa">Weight-for-age</option>
+                <option value="wfh">Weight-for-height</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row">
+        <div>
+            <label>Date of Birth</label>
+            <input type="date" id="dob">
+        </div>
+        <div>
+            <label>Date of Measurement</label>
+            <input type="date" id="dom">
+        </div>
+    </div>
 
     <div class="row">
         <div>
             <label>Measurement Type</label>
             <select id="measure">
-                <option value="auto">Auto (Based on Age)</option>
+                <option value="auto">Auto (Age-based)</option>
                 <option value="L">L (Recumbent Length)</option>
                 <option value="H">H (Standing Height)</option>
             </select>
@@ -22,54 +71,103 @@
         </div>
     </div>
 
-    <!-- ... (Date and Value inputs same as before) ... -->
+    <div class="row">
+        <div>
+            <label>Weight (kg)</label>
+            <input type="number" id="weight" step="0.01" placeholder="e.g. 10.5">
+        </div>
+        <div>
+            <label>Height/Length (cm)</label>
+            <input type="number" id="height" step="0.1" placeholder="e.g. 85.5">
+        </div>
+    </div>
 
     <button onclick="calculate()">Calculate Z-Score</button>
-    <div id="result"></div>
+
+    <div id="result">Waiting for input...</div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
+    document.getElementById('dom').valueAsDate = new Date();
+
     async function calculate() {
-        // ... (Inputs for sex, indicator, dob, dom, weight, height same as before) ...
-        
+        const sex = document.getElementById('sex').value;
+        const ind = document.getElementById('indicator').value;
+        const dob = new Date(document.getElementById('dob').value);
+        const dom = new Date(document.getElementById('dom').value);
+        const weight = parseFloat(document.getElementById('weight').value);
+        const height = parseFloat(document.getElementById('height').value);
         const measure = document.getElementById('measure').value;
         const oedema = document.getElementById('oedema').value;
-        
-        // 1. Calculate Age in Days
-        const diffTime = dom - dob;
-        const ageDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-        // 2. Determine Measurement Type if "Auto"
+        if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
+
+        // 1. Calculate Age in Days
+        const ageDays = Math.floor((dom - dob) / (1000 * 60 * 60 * 24));
+        if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
+
+        // 2. clenhei Logic (Anthro R Package Standard)
         let actualMeasure = measure;
         if (actualMeasure === 'auto') {
             actualMeasure = (ageDays < 731) ? 'L' : 'H';
         }
 
-        // 3. Apply 0.7 cm Correction (clenhei logic)
         let clenhei = height;
+        let correctionNote = "";
         if (ageDays < 731 && actualMeasure === 'H') {
-            clenhei += 0.7; // Converting height to length
+            clenhei += 0.7;
+            correctionNote = "(+0.7cm correction applied)";
         } else if (ageDays >= 731 && actualMeasure === 'L') {
-            clenhei -= 0.7; // Converting length to height
+            clenhei -= 0.7;
+            correctionNote = "(-0.7cm correction applied)";
         }
 
-        // 4. Oedema check for Weight-related indicators
-        if (oedema === 'y' && (ind === 'bmi' || ind === 'wfa' || ind === 'wfh')) {
-            document.getElementById('result').innerHTML = "Z-Score: Missing (Oedema detected)";
+        // 3. Oedema Handling
+        const isWeightRelated = (ind === 'bmi' || ind === 'wfa' || ind === 'wfh');
+        if (oedema === 'y' && isWeightRelated) {
+            document.getElementById('result').innerHTML = "<span class='missing'>Z-Score: Missing</span><br><small>Weight-related indicators are not calculated when Oedema is present.</small>";
             return;
         }
 
-        // 5. Final Value Preparation (y)
+        // 4. Value Preparation (y)
         let y;
         if (ind === 'bmi') {
-            const hMeters = clenhei / 100;
-            y = weight / (hMeters * hMeters);
-        } else if (ind === 'wfa' || ind === 'wfh') {
-            y = weight;
+            y = weight / Math.pow(clenhei / 100, 2);
         } else if (ind === 'hfa') {
             y = clenhei;
+        } else {
+            y = weight;
         }
 
-        // ... (Rest of the CSV Lookup and LMS Formula same as before) ...
+        // 5. CSV Lookup
+        const fileName = `data/${ind}_${sex}_0_5.csv`;
+        Papa.parse(fileName, {
+            download: true,
+            header: true,
+            dynamicTyping: true,
+            complete: function(results) {
+                const data = results.data.filter(row => row.L !== undefined);
+                const lookupCol = (ind === 'wfh') ? 'Centimeters' : 'Day';
+                const target = (ind === 'wfh') ? clenhei : ageDays;
+
+                const match = data.reduce((prev, curr) => {
+                    return (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev);
+                });
+
+                if (match) {
+                    const { L, M, S } = match;
+                    const zScore = (Math.pow((y / M), L) - 1) / (L * S);
+                    
+                    document.getElementById('result').innerHTML = `
+                        <strong>Z-Score: ${zScore.toFixed(2)}</strong><br>
+                        <small>Adjusted Measure (clenhei): ${clenhei.toFixed(1)} cm ${correctionNote}</small><br>
+                        <small>Age: ${ageDays} days (${(ageDays/30.4375).toFixed(1)} months)</small>
+                    `;
+                }
+            }
+        });
     }
 </script>
+</body>
+</html>
