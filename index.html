@@ -2,27 +2,29 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>WHO Anthro-Aligned Calculator</title>
+    <title>WHO Anthro-Aligned Multi-Calculator</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; max-width: 650px; margin: 40px auto; padding: 20px; background-color: #f4f7f9; }
+        body { font-family: 'Segoe UI', sans-serif; max-width: 700px; margin: 40px auto; padding: 20px; background-color: #f4f7f9; }
         .card { border: 1px solid #e0e0e0; padding: 30px; border-radius: 12px; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        h2 { color: #0056b3; margin-top: 0; }
+        h2 { color: #0056b3; margin-top: 0; text-align: center; }
         .row { display: flex; gap: 15px; margin-bottom: 15px; }
         .row div { flex: 1; }
         label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.85em; color: #555; }
         input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
-        button { background: #007bff; color: white; border: none; padding: 14px; width: 100%; margin-top: 20px; cursor: pointer; border-radius: 6px; font-size: 1em; font-weight: bold; }
-        button:hover { background: #0056b3; }
-        #result { margin-top: 25px; padding: 20px; border-radius: 8px; background: #e9ecef; font-size: 1.1em; line-height: 1.6; border-left: 6px solid #007bff; }
-        .missing { color: #dc3545; font-weight: bold; }
+        button { background: #28a745; color: white; border: none; padding: 14px; width: 100%; margin-top: 20px; cursor: pointer; border-radius: 6px; font-size: 1.1em; font-weight: bold; }
+        button:hover { background: #218838; }
+        table { width: 100%; border-collapse: collapse; margin-top: 25px; background: white; }
+        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: center; }
+        th { background-color: #007bff; color: white; font-size: 0.9em; }
+        .result-val { font-weight: bold; color: #0056b3; }
+        #summary { margin-top: 15px; font-size: 0.9em; color: #666; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>Growth Standards Calculator</h2>
-    <p><small>Implementing WHO Anthro R Logic (clenhei & oedema)</small></p>
-
+    <h2>Growth Analysis Dashboard</h2>
+    
     <div class="row">
         <div>
             <label>Sex</label>
@@ -32,12 +34,10 @@
             </select>
         </div>
         <div>
-            <label>Indicator</label>
-            <select id="indicator">
-                <option value="bmi">BMI-for-age</option>
-                <option value="hfa">Height-for-age</option>
-                <option value="wfa">Weight-for-age</option>
-                <option value="wfh">Weight-for-height</option>
+            <label>Oedema</label>
+            <select id="oedema">
+                <option value="n">No</option>
+                <option value="y">Yes</option>
             </select>
         </div>
     </div>
@@ -57,43 +57,44 @@
         <div>
             <label>Measurement Type</label>
             <select id="measure">
-                <option value="auto">Auto (Age-based)</option>
+                <option value="H" selected>H (Standing Height)</option>
                 <option value="L">L (Recumbent Length)</option>
-                <option value="H">H (Standing Height)</option>
             </select>
         </div>
-        <div>
-            <label>Oedema</label>
-            <select id="oedema">
-                <option value="n">No</option>
-                <option value="y">Yes</option>
-            </select>
-        </div>
-    </div>
-
-    <div class="row">
         <div>
             <label>Weight (kg)</label>
-            <input type="number" id="weight" step="0.01" placeholder="e.g. 10.5">
+            <input type="number" id="weight" step="0.01">
         </div>
         <div>
             <label>Height/Length (cm)</label>
-            <input type="number" id="height" step="0.1" placeholder="e.g. 85.5">
+            <input type="number" id="height" step="0.1">
         </div>
     </div>
 
-    <button onclick="calculate()">Calculate Z-Score</button>
+    <button onclick="calculateAll()">Run Comprehensive Analysis</button>
 
-    <div id="result">Waiting for input...</div>
+    <div id="summary"></div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Indicator</th>
+                <th>Standard Value</th>
+                <th>Z-Score</th>
+            </tr>
+        </thead>
+        <tbody id="resultsTable">
+            <tr><td colspan="3">Enter data to see results</td></tr>
+        </tbody>
+    </table>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
     document.getElementById('dom').valueAsDate = new Date();
 
-    async function calculate() {
+    async function calculateAll() {
         const sex = document.getElementById('sex').value;
-        const ind = document.getElementById('indicator').value;
         const dob = new Date(document.getElementById('dob').value);
         const dom = new Date(document.getElementById('dom').value);
         const weight = parseFloat(document.getElementById('weight').value);
@@ -101,72 +102,69 @@
         const measure = document.getElementById('measure').value;
         const oedema = document.getElementById('oedema').value;
 
-        if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
-
-        // 1. Calculate Age in Days
+        if (isNaN(dob) || isNaN(dom)) { alert("Check dates"); return; }
         const ageDays = Math.floor((dom - dob) / (1000 * 60 * 60 * 24));
-        if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
-
-        // 2. clenhei Logic (Anthro R Package Standard)
-        let actualMeasure = measure;
-        if (actualMeasure === 'auto') {
-            actualMeasure = (ageDays < 731) ? 'L' : 'H';
-        }
-
+        
+        // clenhei Logic
         let clenhei = height;
-        let correctionNote = "";
-        if (ageDays < 731 && actualMeasure === 'H') {
-            clenhei += 0.7;
-            correctionNote = "(+0.7cm correction applied)";
-        } else if (ageDays >= 731 && actualMeasure === 'L') {
-            clenhei -= 0.7;
-            correctionNote = "(-0.7cm correction applied)";
+        if (!isNaN(height)) {
+            if (ageDays < 731 && measure === 'H') clenhei += 0.7;
+            else if (ageDays >= 731 && measure === 'L') clenhei -= 0.7;
         }
 
-        // 3. Oedema Handling
-        const isWeightRelated = (ind === 'bmi' || ind === 'wfa' || ind === 'wfh');
-        if (oedema === 'y' && isWeightRelated) {
-            document.getElementById('result').innerHTML = "<span class='missing'>Z-Score: Missing</span><br><small>Weight-related indicators are not calculated when Oedema is present.</small>";
-            return;
-        }
+        // Standard BMI calculation
+        const bmiVal = (!isNaN(weight) && !isNaN(clenhei)) ? (weight / Math.pow(clenhei / 100, 2)) : null;
 
-        // 4. Value Preparation (y)
-        let y;
-        if (ind === 'bmi') {
-            y = weight / Math.pow(clenhei / 100, 2);
-        } else if (ind === 'hfa') {
-            y = clenhei;
-        } else {
-            y = weight;
-        }
+        const indicators = [
+            { id: 'hfa', label: 'Height-for-age', val: clenhei, unit: 'cm' },
+            { id: 'wfa', label: 'Weight-for-age', val: weight, unit: 'kg' },
+            { id: 'bmi', label: 'BMI-for-age', val: bmiVal, unit: 'kg/m²' },
+            { id: 'wfh', label: 'Weight-for-height', val: weight, unit: 'kg' }
+        ];
 
-        // 5. CSV Lookup
-        const fileName = `data/${ind}_${sex}_0_5.csv`;
-        Papa.parse(fileName, {
-            download: true,
-            header: true,
-            dynamicTyping: true,
-            complete: function(results) {
-                const data = results.data.filter(row => row.L !== undefined);
-                const lookupCol = (ind === 'wfh') ? 'Centimeters' : 'Day';
-                const target = (ind === 'wfh') ? clenhei : ageDays;
+        document.getElementById('resultsTable').innerHTML = "";
+        document.getElementById('summary').innerHTML = `Age: ${ageDays} days | Adjusted Height: ${isNaN(clenhei) ? 'NA' : clenhei.toFixed(1)} cm`;
 
-                const match = data.reduce((prev, curr) => {
-                    return (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev);
-                });
-
-                if (match) {
-                    const { L, M, S } = match;
-                    const zScore = (Math.pow((y / M), L) - 1) / (L * S);
-                    
-                    document.getElementById('result').innerHTML = `
-                        <strong>Z-Score: ${zScore.toFixed(2)}</strong><br>
-                        <small>Adjusted Measure (clenhei): ${clenhei.toFixed(1)} cm ${correctionNote}</small><br>
-                        <small>Age: ${ageDays} days (${(ageDays/30.4375).toFixed(1)} months)</small>
-                    `;
-                }
+        for (let ind of indicators) {
+            const isWeightRelated = (ind.id !== 'hfa');
+            if (oedema === 'y' && isWeightRelated) {
+                renderRow(ind.label, ind.val, "NA (Oedema)", ind.unit);
+                continue;
             }
-        });
+
+            if (isNaN(ind.val) || ind.val === null) {
+                renderRow(ind.label, "NA", "NA", ind.unit);
+                continue;
+            }
+
+            const fileName = `data/${ind.id}_${sex}_0_5.csv`;
+            Papa.parse(fileName, {
+                download: true, header: true, dynamicTyping: true,
+                complete: function(results) {
+                    const data = results.data.filter(row => row.L !== undefined);
+                    const lookupCol = (ind.id === 'wfh') ? 'Centimeters' : 'Day';
+                    const target = (ind.id === 'wfh') ? clenhei : ageDays;
+
+                    const match = data.reduce((prev, curr) => 
+                        (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
+                    );
+
+                    const z = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
+                    renderRow(ind.label, ind.val, z.toFixed(2), ind.unit);
+                },
+                error: () => renderRow(ind.label, ind.val, "File Error", ind.unit)
+            });
+        }
+    }
+
+    function renderRow(label, rawVal, zVal, unit) {
+        const table = document.getElementById('resultsTable');
+        const displayVal = (typeof rawVal === 'number') ? rawVal.toFixed(2) : rawVal;
+        table.innerHTML += `<tr>
+            <td>${label}</td>
+            <td>${displayVal} ${unit}</td>
+            <td class="result-val">${zVal}</td>
+        </tr>`;
     }
 </script>
 </body>
