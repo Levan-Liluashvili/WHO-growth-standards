@@ -86,8 +86,19 @@
     <!-- Button takes full width -->
     <button onclick="calculate()">Calculate Z-Score</button>
 
-    <!-- Results appear at the bottom across the full width -->
-    <div id="result">Waiting for input...</div>
+<div id="result" style="margin-top: 25px; padding: 20px; border-radius: 8px; background: #f8f9fa; border-left: 6px solid #007bff;">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #dee2e6; text-align: left;">
+                <th style="padding: 8px;">Indicator</th>
+                <th style="padding: 8px;">Z-Score</th>
+            </tr>
+        </thead>
+        <tbody id="multi-results">
+            <tr><td colspan="2" style="padding: 10px; color: #666;">Waiting for input...</td></tr>
+        </tbody>
+    </table>
+</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
@@ -111,7 +122,6 @@
         if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
 
         // 2. clenhei Logic (Anthro R Package Standard)
-        // We use the selected 'measure' directly since 'auto' is removed
         let clenhei = height;
         let correctionNote = "";
         
@@ -122,52 +132,60 @@
             clenhei -= 0.7; // Converting recumbent length to standing height
             correctionNote = "(-0.7cm correction applied)";
 }
+// 3. Prepare Multi-Indicator Configuration
+        const indicatorConfig = [
+            { id: 'hfa', name: 'Height-for-age', val: clenhei },
+            { id: 'wfa', name: 'Weight-for-age', val: weight },
+            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei)) ? (weight / Math.pow(clenhei / 100, 2)) : NaN },
+            { id: 'wfh', name: 'Weight-for-height', val: weight }
+        ];
 
-        // 3. Oedema Handling
-        const isWeightRelated = (ind === 'bmi' || ind === 'wfa' || ind === 'wfh');
-        if (oedema === 'y' && isWeightRelated) {
-            document.getElementById('result').innerHTML = "<span class='missing'>Z-Score: Missing</span><br><small>Weight-related indicators are not calculated when Oedema is present.</small>";
-            return;
-        }
+        // Clear the results table before starting
+        const resultsBody = document.getElementById('multi-results');
+        resultsBody.innerHTML = ""; 
 
-        // 4. Value Preparation (y)
-        let y;
-        if (ind === 'bmi') {
-            y = weight / Math.pow(clenhei / 100, 2);
-        } else if (ind === 'hfa') {
-            y = clenhei;
-        } else {
-            y = weight;
-        }
+        // 4. Loop through all indicators
+        for (const ind of indicatorConfig) {
+            const isWeightRelated = (ind.id !== 'hfa');
 
-        // 5. CSV Lookup
-        const fileName = `data/${ind}_${sex}_0_5.csv`;
-        Papa.parse(fileName, {
-            download: true,
-            header: true,
-            dynamicTyping: true,
-            complete: function(results) {
-                const data = results.data.filter(row => row.L !== undefined);
-                const lookupCol = (ind === 'wfh') ? 'Centimeters' : 'Day';
-                const target = (ind === 'wfh') ? clenhei : ageDays;
-
-                const match = data.reduce((prev, curr) => {
-                    return (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev);
-                });
-
-                if (match) {
-                    const { L, M, S } = match;
-                    const zScore = (Math.pow((y / M), L) - 1) / (L * S);
-                    
-                    document.getElementById('result').innerHTML = `
-                        <strong>Z-Score: ${zScore.toFixed(2)}</strong><br>
-                        <small>Adjusted Measure (clenhei): ${clenhei.toFixed(1)} cm ${correctionNote}</small><br>
-                        <small>Age: ${ageDays} days (${(ageDays/30.4375).toFixed(1)} months)</small>
-                    `;
-                }
+            // Handle Missing Data or Oedema
+            if (isNaN(ind.val) || (oedema === 'y' && isWeightRelated)) {
+                appendResultRow(ind.name, "NA");
+                continue; 
             }
-        });
+
+            // 5. CSV Lookup
+            const fileName = `data/${ind.id}_${sex}_0_5.csv`;
+            Papa.parse(fileName, {
+                download: true,
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    const data = results.data.filter(row => row.L !== undefined);
+                    const lookupCol = (ind.id === 'wfh') ? 'Centimeters' : 'Day';
+                    const target = (ind.id === 'wfh') ? clenhei : ageDays;
+
+                    const match = data.reduce((prev, curr) => 
+                        (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
+                    );
+
+                    const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
+                    appendResultRow(ind.name, zScore.toFixed(2));
+                }
+            });
+        }
+    } // End of calculate function
+
+    // Helper function to update the table[cite: 1]
+    function appendResultRow(name, score) {
+        const resultsBody = document.getElementById('multi-results');
+        resultsBody.innerHTML += `
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 8px;">${name}</td>
+                <td style="padding: 8px; font-weight: bold; color: ${score === 'NA' ? '#dc3545' : '#0056b3'};">${score}</td>
+            </tr>`;
     }
+
     // Real-time BMI calculation function
     function updateBMI() {
         const weight = parseFloat(document.getElementById('weight').value);
