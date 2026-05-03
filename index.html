@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WHO Child Growth Standards Calculator</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; line-height: 1.6; }
+        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; background: #f9f9f9; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; margin-top: 20px; cursor: pointer; border-radius: 4px; }
+        #result { margin-top: 20px; font-size: 1.2em; font-weight: bold; color: #2c3e50; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Growth Standards Calculator</h2>
+    <p><small>Based on WHO Expanded LMS Tables</small></p>
+
+    <label>Sex</label>
+    <select id="sex">
+        <option value="boys">Boy</option>
+        <option value="girls">Girl</option>
+    </select>
+
+    <label>Indicator</label>
+    <select id="indicator">
+        <option value="bmi">BMI-for-age</option>
+        <option value="hfa">Height-for-age</option>
+        <option value="wfa">Weight-for-age</option>
+        <option value="wfh">Weight-for-height</option>
+    </select>
+
+    <label id="ageLabel">Age (Months)</label>
+    <input type="number" id="ageInput" step="0.1" placeholder="e.g. 24">
+
+    <label id="valLabel">Value (BMI / cm / kg)</label>
+    <input type="number" id="valInput" step="0.01">
+
+    <button onclick="calculate()">Calculate Z-Score</button>
+
+    <div id="result"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+<script>
+    const DAYS_CONVERSION = 30.4375; // WHO Standard
+
+    async function calculate() {
+        const sex = document.getElementById('sex').value;
+        const ind = document.getElementById('indicator').value;
+        const ageMonths = parseFloat(document.getElementById('ageInput').value);
+        const userVal = parseFloat(document.getElementById('valInput').value);
+        
+        const ageDays = Math.round(ageMonths * DAYS_CONVERSION);
+        
+        // Determine file path based on WHO 2-year discontinuity rule
+        let fileName = `data/${ind}_${sex}_0_5.csv`;
+        
+        Papa.parse(fileName, {
+            download: true,
+            header: true,
+            dynamicTyping: true,
+            complete: function(results) {
+                const data = results.data;
+                // Find closest match in the 'Day' or 'Centimeters' column
+                const lookupCol = (ind === 'wfh') ? 'Centimeters' : 'Day';
+                const match = data.reduce((prev, curr) => {
+                    return (Math.abs(curr[lookupCol] - (ind === 'wfh' ? userVal : ageDays)) < Math.abs(prev[lookupCol] - (ind === 'wfh' ? userVal : ageDays)) ? curr : prev);
+                });
+
+                if (match) {
+                    const { L, M, S } = match;
+                    // LMS Formula
+                    const zScore = (Math.pow((userVal / M), L) - 1) / (L * S);
+                    document.getElementById('result').innerText = `Z-Score: ${zScore.toFixed(2)}`;
+                }
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
