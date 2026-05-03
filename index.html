@@ -101,6 +101,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
+    // Restore default measurement date to today
     document.getElementById('dom').valueAsDate = new Date();
 
     async function calculate() {
@@ -112,41 +113,39 @@
         const measure = document.getElementById('measure').value;
         const oedema = document.getElementById('oedema').value;
 
-        if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
-
-        // 1. Calculate Age in Days
-        const ageDays = Math.floor((dom - dob) / (1000 * 60 * 60 * 24));
-        if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
-
-        // 2. clenhei Logic (Anthro R Package Standard)
-        let clenhei = height;
-        let correctionNote = "";
-        
-        if (ageDays < 731 && measure === 'H') {
-            clenhei += 0.7; 
-            correctionNote = "(+0.7cm correction applied)";
-        } else if (ageDays >= 731 && measure === 'L') {
-            clenhei -= 0.7; 
-            correctionNote = "(-0.7cm correction applied)";
+        if (isNaN(dob) || isNaN(dom)) { 
+            alert("Please enter valid dates."); 
+            return; 
         }
 
-        // 3. Prepare Multi-Indicator Configuration
+        const ageDays = Math.floor((dom - dob) / (1000 * 60 * 60 * 24));
+        if (ageDays < 0) { 
+            alert("Measurement date must be after birth date."); 
+            return; 
+        }
+
+        let clenhei = height;
+        if (ageDays < 731 && measure === 'H') {
+            clenhei += 0.7; 
+        } else if (ageDays >= 731 && measure === 'L') {
+            clenhei -= 0.7; 
+        }
+
+        // 1. Define Fixed Order: BMI, then Height, then Weight
         const indicatorConfig = [
+            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei)) ? (weight / Math.pow(clenhei / 100, 2)) : NaN },
             { id: 'hfa', name: 'Height-for-age', val: clenhei },
             { id: 'wfa', name: 'Weight-for-age', val: weight },
-            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei)) ? (weight / Math.pow(clenhei / 100, 2)) : NaN },
             { id: 'wfh', name: 'Weight-for-height', val: weight }
         ];
 
-        // Clear the results table
         const resultsBody = document.getElementById('multi-results');
-        resultsBody.innerHTML = ""; 
+        resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
 
-// 4. Create an array of Promises to fetch all data first
+        // 2. Create Promises for each indicator to ensure they wait for CSV loading
         const promises = indicatorConfig.map(ind => {
             const isWeightRelated = (ind.id !== 'hfa');
 
-            // Return NA immediately if data is missing or Oedema is present
             if (isNaN(ind.val) || (oedema === 'y' && isWeightRelated)) {
                 return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
             }
@@ -170,22 +169,23 @@
                         const percentile = zToPercentile(zScore);
                         
                         resolve({ name: ind.name, score: zScore.toFixed(2), percentile: percentile });
+                    },
+                    error: function() {
+                        resolve({ name: ind.name, score: "Error", percentile: "NA" });
                     }
                 });
             });
         });
 
-        // 5. Wait for all files and then display in order
-        Promise.all(promises).then(results => {
-            resultsBody.innerHTML = ""; // Clear one last time
-            results.forEach(res => {
+        // 3. Wait for all calculations and display them in the defined order
+        Promise.all(promises).then(orderedResults => {
+            resultsBody.innerHTML = ""; 
+            orderedResults.forEach(res => {
                 appendResultRow(res.name, res.score, res.percentile);
             });
         });
-        }
     }
 
-    // Helper function to update the table with 3 columns
     function appendResultRow(name, score, percentile) {
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML += `
@@ -196,7 +196,6 @@
             </tr>`;
     }
 
-    // Real-time BMI display
     function updateBMI() {
         const weight = parseFloat(document.getElementById('weight').value);
         const height = parseFloat(document.getElementById('height').value);
@@ -212,7 +211,6 @@
     document.getElementById('weight').addEventListener('input', updateBMI);
     document.getElementById('height').addEventListener('input', updateBMI);
 
-    // Math function for Percentiles
     function zToPercentile(z) {
         if (z === "NA" || isNaN(z)) return "NA";
         const t = 1 / (1 + 0.2316419 * Math.abs(z));
@@ -221,7 +219,6 @@
         if (z > 0) p = 1 - p;
         return (p * 100).toFixed(1) + "th";
     }
-    
 </script>
 </body>
 </html>
