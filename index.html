@@ -31,15 +31,7 @@
                 <option value="girls">Girl</option>
             </select>
         </div>
-        <div>
-            <label>Indicator</label>
-            <select id="indicator">
-                <option value="bmi">BMI-for-age</option>
-                <option value="hfa">Height-for-age</option>
-                <option value="wfa">Weight-for-age</option>
-                <option value="wfh">Weight-for-height</option>
-            </select>
-        </div>
+  
     </div>
 
     <div class="row">
@@ -107,7 +99,6 @@
 
     async function calculate() {
         const sex = document.getElementById('sex').value;
-        const ind = document.getElementById('indicator').value;
         const dob = new Date(document.getElementById('dob').value);
         const dom = new Date(document.getElementById('dom').value);
         const weight = parseFloat(document.getElementById('weight').value);
