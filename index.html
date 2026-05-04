@@ -186,46 +186,70 @@
     }
 
     // 7. Flagging System (0-19 years)
-    function appendResultRow(name, id, score, percentile) {
-        const resultsBody = document.getElementById('multi-results');
-        const zNum = parseFloat(score);
-        
-        let bgColor = "transparent";
-        let textColor = "#0056b3";
-        let label = "";
+   function appendResultRow(name, id, score, percentile) {
+    const resultsBody = document.getElementById('multi-results');
+    const zNum = parseFloat(score);
+    
+    // Default Styling
+    let cellStyle = "padding: 10px; font-weight: bold; border-radius: 4px;";
+    let zColor = "#0056b3"; // Default blue
+    let zBg = "transparent";
+    let pColor = "#666";
+    let pBg = "transparent";
+    let label = "";
 
-        if (score !== 'NA' && !isNaN(zNum)) {
-            // Flag Limits per WHO Manual
-            const limits = {
-                wfa: { low: -6, high: 5 },
-                hfa: { low: -6, high: 6 },
-                bmi: { low: -5, high: 5 },
-                wfh: { low: -5, high: 5 }
-            };
+    if (score !== 'NA' && !isNaN(zNum)) {
+        const limits = {
+            wfa: { low: -6, high: 5 },
+            hfa: { low: -6, high: 6 },
+            bmi: { low: -5, high: 5 },
+            wfh: { low: -5, high: 5 }
+        };
+        const limit = limits[id];
 
-            const limit = limits[id];
-
-            // Check for Implausible Flags
-            if (zNum < limit.low || zNum > limit.high) {
-                bgColor = "#ffcccc"; 
-                textColor = "#d9534f";
-                label = " (Flagged)";
-            } 
-            // Check for Extreme Status (±3 SD)
-            else if (zNum < -3 || zNum > 3) {
-                bgColor = "#333"; 
-                textColor = "#fff";
-                label = " (Extreme)";
-            }
+        // 1. Determine Color based on WHO Table
+        if (zNum < limit.low || zNum > limit.high) {
+            // Flagged (Implausible)
+            zBg = "#ffcccc"; 
+            zColor = "#d9534f";
+            label = " (Flagged)";
+        } else if (zNum < -3 || zNum > 3) {
+            // Black Range (Extreme)
+            zBg = "#333"; 
+            zColor = "#fff";
+            pBg = "#333";
+            pColor = "#fff";
+            label = " (Extreme)";
+        } else if (Math.abs(zNum) > 2) {
+            // Red Range
+            zBg = "#ff0000";
+            zColor = "#fff";
+        } else if (Math.abs(zNum) > 1) {
+            // Gold Range
+            zBg = "#FFD700";
+            zColor = "#000";
+        } else {
+            // Green Range
+            zBg = "#90EE90";
+            zColor = "#000";
         }
-
-        resultsBody.innerHTML += `
-            <tr style="border-bottom: 1px solid #eee; background-color: ${bgColor}; transition: background 0.3s;">
-                <td style="padding: 10px;">${name}</td>
-                <td style="padding: 10px; font-weight: bold; color: ${textColor};">${score}${label}</td>
-                <td style="padding: 10px; color: ${bgColor === '#333' ? '#bbb' : '#666'};">${percentile}</td>
-            </tr>`;
     }
+
+    resultsBody.innerHTML += `
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 10px; color: #333;">${name}</td>
+            <td style="padding: 5px;">
+                <div style="${cellStyle} background-color: ${zBg}; color: ${zColor};">
+                    ${score}${label}
+                </div>
+            </td>
+            <td style="padding: 5px;">
+                <div style="${cellStyle} background-color: ${pBg}; color: ${pColor};">
+                    ${percentile}
+                </div>
+            </td>
+        </tr>`;
+}
 
     function updateBMI() {
         const weight = parseFloat(document.getElementById('weight').value);
