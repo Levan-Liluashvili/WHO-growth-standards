@@ -126,6 +126,9 @@
             return; 
         }
 
+        // AnthroPlus Rule: Calculate age in months (average month length)
+        const ageMonths = ageDays / 30.4375;
+
         // 2. clenhei Logic (WHO Anthro Standard)
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') {
@@ -134,7 +137,7 @@
             clenhei -= 0.7; 
         }
 
-        // 3. Define Fixed Order: BMI, then Height, then Weight
+        // 3. Define Indicators with Fixed Order
         const indicatorConfig = [
             { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei)) ? (weight / Math.pow(clenhei / 100, 2)) : NaN },
             { id: 'hfa', name: 'Height-for-age', val: clenhei },
@@ -145,11 +148,21 @@
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
 
-        // 4. Create Promises to fetch all CSVs in parallel
+        // 4. Create Promises for calculation
         const promises = indicatorConfig.map(ind => {
             const isWeightRelated = (ind.id !== 'hfa');
 
-            // Handle Missing Data or Oedema (Anthro R Logic)
+            // AnthroPlus Manual Rule: Above 228 months, all indicators are NA
+            if (ageMonths > 228) {
+                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
+            }
+
+            // AnthroPlus Manual Rule: Weight-for-age is NA if age > 120 months
+            if (ind.id === 'wfa' && ageMonths > 120) {
+                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
+            }
+
+            // Standard Missing Data or Oedema Logic
             if (isNaN(ind.val) || (oedema === 'y' && isWeightRelated)) {
                 return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
             }
@@ -172,8 +185,8 @@
                         // LMS Formula
                         const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
                         
-                        // Pass ind.id to handle flagging logic
-                        const percentile = zToPercentile(zScore, ind.id);
+                        // Apply AnthroPlus Percentile Rule (+/- 3 SD)
+                        const percentile = zToPercentile(zScore);
                         
                         resolve({ name: ind.name, score: zScore.toFixed(2), percentile: percentile });
                     },
@@ -184,7 +197,7 @@
             });
         });
 
-        // 5. Render results in the specific order
+        // 5. Render results
         Promise.all(promises).then(orderedResults => {
             resultsBody.innerHTML = ""; 
             orderedResults.forEach(res => {
@@ -203,7 +216,6 @@
             </tr>`;
     }
 
-    // Real-time BMI display
     function updateBMI() {
         const weight = parseFloat(document.getElementById('weight').value);
         const height = parseFloat(document.getElementById('height').value);
@@ -219,22 +231,24 @@
     document.getElementById('weight').addEventListener('input', updateBMI);
     document.getElementById('height').addEventListener('input', updateBMI);
 
-function zToPercentile(z) {
-    if (z === "NA" || isNaN(z)) return "NA";
-    
-    // AnthroPlus Rule: Percentiles read "NA" for all z-score values <-3 SD and >+3 SD
-    const zNum = parseFloat(z);
-    if (zNum < -3 || zNum > 3) return "NA";
+    // Percentile Function strictly following AnthroPlus manual (+/- 3 SD)
+    function zToPercentile(z) {
+        if (z === "NA" || isNaN(z)) return "NA";
+        
+        const zNum = parseFloat(z);
 
-    // Standard Math for valid clinical ranges (-3 to +3)
-    const t = 1 / (1 + 0.2316419 * Math.abs(zNum));
-    const d = 0.3989423 * Math.exp(-zNum * zNum / 2);
-    let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
-    if (zNum > 0) p = 1 - p;
-    
-    let pct = p * 100;
-    return pct.toFixed(1) + "th";
-}
+        // AnthroPlus Manual Rule: Percentiles read "NA" for all z-score values <-3 SD and >+3 SD
+        if (zNum < -3 || zNum > 3) return "NA";
+
+        // Standard Normal CDF approximation
+        const t = 1 / (1 + 0.2316419 * Math.abs(zNum));
+        const d = 0.3989423 * Math.exp(-zNum * zNum / 2);
+        let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+        
+        if (zNum > 0) p = 1 - p;
+        
+        let pct = p * 100;
+        return pct.toFixed(1) + "th";
     }
 </script>
 </body>
