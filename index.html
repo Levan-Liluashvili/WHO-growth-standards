@@ -99,8 +99,11 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
-    // 1. Set default measurement date to today on page load
-    document.getElementById('dom').valueAsDate = new Date();
+    // 1. Initialize Default Date
+    window.addEventListener('DOMContentLoaded', () => {
+        const domInput = document.getElementById('dom');
+        if (domInput) domInput.valueAsDate = new Date();
+    });
 
     async function calculate() {
         const sex = document.getElementById('sex').value;
@@ -113,46 +116,31 @@
 
         if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
 
-        // 2. Age Logic (WHO Anthro Protocol)
         const ageDaysRaw = (dom - dob) / (1000 * 60 * 60 * 24);
         const ageDays = Math.round(ageDaysRaw); 
         if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
 
         const totalMonths = Math.floor(ageDays / 30.4375);
-        const displayYears = Math.floor(totalMonths / 12);
-        const displayMonths = totalMonths % 12;
+        const preciseMonths = ageDays / 30.4375;
+        
+        document.getElementById('ageDisplay').innerText = 
+            `Age: ${Math.floor(totalMonths / 12)} yr ${totalMonths % 12} mo (${totalMonths} mo)`;
 
-        document.getElementById('ageDisplay').innerText = `Age: ${displayYears} yr ${displayMonths} mo (${totalMonths} mo)`;
-
-        // 3. Length/Height correction (clenhei)
+        // 2. Length/Height correction
         let clenhei = height;
-        if (ageDays < 731 && measure === 'H') {
-            clenhei += 0.7; 
-        } else if (ageDays >= 731 && measure === 'L') {
-            clenhei -= 0.7; 
-        }
+        if (ageDays < 731 && measure === 'H') clenhei += 0.7; 
+        else if (ageDays >= 731 && measure === 'L') clenhei -= 0.7; 
 
-        // 4. Define Indicators (WFH excluded as requested)
         const indicatorConfig = [
             { id: 'hfa', name: 'Height-for-age', val: !isNaN(clenhei) ? clenhei : NaN },
-            { 
-                id: 'wfa', 
-                name: 'Weight-for-age', 
-                val: (!isNaN(weight) && totalMonths <= 120 && oedema !== 'y') ? weight : NaN 
-            },
-            { 
-                id: 'bmi', 
-                name: 'BMI-for-age', 
-                val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN 
-            }
+            { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && totalMonths <= 120 && oedema !== 'y') ? weight : NaN },
+            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN }
         ];
 
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
 
-        // 5. Create Calculation Promises
         const promises = indicatorConfig.map(ind => {
-            // Absolute limit of 19 years (228 months)
             if (totalMonths > 228 || isNaN(ind.val)) {
                 return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
             }
@@ -165,131 +153,109 @@
                     download: true,
                     header: true,
                     dynamicTyping: true,
-complete: function(results) {
-    const data = results.data.filter(row => row.L !== undefined);
-    
-    let lookupCol = (totalMonths <= 60) ? 'Day' : 'Month';
-    let target = (totalMonths <= 60) ? ageDays : (ageDays / 30.4375); // Use precise decimal months
+                    complete: function(results) {
+                        const data = results.data.filter(row => row.L !== undefined);
+                        let lookupCol = (totalMonths <= 60) ? 'Day' : 'Month';
+                        let target = (totalMonths <= 60) ? ageDays : preciseMonths;
 
-    // 1. Find the two surrounding rows for interpolation
-    let row1 = data[0];
-    let row2 = data[0];
+                        // 3. LINEAR INTERPOLATION OF L, M, S
+                        let r1 = data[0], r2 = data[0];
+                        for (let i = 0; i < data.length - 1; i++) {
+                            if (target >= data[i][lookupCol] && target <= data[i+1][lookupCol]) {
+                                r1 = data[i]; r2 = data[i+1]; break;
+                            }
+                        }
+                        const gap = r2[lookupCol] - r1[lookupCol];
+                        const f = gap === 0 ? 0 : (target - r1[lookupCol]) / gap;
 
-    for (let i = 0; i < data.length - 1; i++) {
-        if (target >= data[i][lookupCol] && target <= data[i+1][lookupCol]) {
-            row1 = data[i];
-            row2 = data[i+1];
-            break;
-        }
-    }
+                        const L = r1.L + (r2.L - r1.L) * f;
+                        const M = r1.M + (r2.M - r1.M) * f;
+                        const S = r1.S + (r2.S - r1.S) * f;
+                        const y = ind.val;
 
-    // 2. Calculate the interpolation factor (fractional distance between rows)
-    const diff = row2[lookupCol] - row1[lookupCol];
-    const factor = diff === 0 ? 0 : (target - row1[lookupCol]) / diff;
+                        // 4. Z-SCORE CALCULATION
+                        let z = (Math.pow((y / M), L) - 1) / (L * S);
 
-    // 3. Interpolate L, M, and S parameters
-    const L = row1.L + (row2.L - row1.L) * factor;
-    const M = row1.M + (row2.M - row1.M) * factor;
-    const S = row1.S + (row2.S - row1.S) * factor;
-    const y = ind.val;
+                        // 5. TAIL ADJUSTMENTS
+                        if (ind.id !== 'hfa') {
+                            if (totalMonths <= 60) {
+                                // WHO 0-5 Adjusted SD method for Skewed Data
+                                if (z > 3) {
+                                    const sd3pos = M * Math.pow(1 + L * S * 3, 1 / L);
+                                    const sd2pos = M * Math.pow(1 + L * S * 2, 1 / L);
+                                    z = 3 + (y - sd3pos) / (sd3pos - sd2pos);
+                                } else if (z < -3) {
+                                    const sd3neg = M * Math.pow(1 + L * S * (-3), 1 / L);
+                                    const sd2neg = M * Math.pow(1 + L * S * (-2), 1 / L);
+                                    z = -3 + (y - sd3neg) / (sd2neg - sd3neg);
+                                }
+                            } else {
+                                // WHO 5-19 Tail Correction (Manual Logic)
+                                if (z > 3) {
+                                    const s3 = M * Math.pow(1 + L * S * 3, 1 / L);
+                                    const s2 = M * Math.pow(1 + L * S * 2, 1 / L);
+                                    z = 3 + (y - s3) / (s3 - s2);
+                                } else if (z < -3) {
+                                    const s3 = M * Math.pow(1 + L * S * (-3), 1 / L);
+                                    const s2 = M * Math.pow(1 + L * S * (-2), 1 / L);
+                                    z = -3 + (y - s3) / (s2 - s3);
+                                }
+                            }
+                        }
 
-    // 4. Standard LMS Z-score
-    let zScore = (Math.pow((y / M), L) - 1) / (L * S);
-
-    // 5. Apply WHO 2007 Tail Correction (5-19y, Weight/BMI only)
-    if (totalMonths > 60 && ind.id !== 'hfa') {
-        if (zScore > 3) {
-            const sd3pos = M * Math.pow(1 + L * S * 3, 1 / L);
-            const sd2pos = M * Math.pow(1 + L * S * 2, 1 / L);
-            zScore = 3 + (y - sd3pos) / (sd3pos - sd2pos);
-        } else if (zScore < -3) {
-            const sd3neg = M * Math.pow(1 + L * S * (-3), 1 / L);
-            const sd2neg = M * Math.pow(1 + L * S * (-2), 1 / L);
-            zScore = -3 + (y - sd3neg) / (sd2neg - sd3neg);
-        }
-    }
-
-    const percentile = zToPercentile(zScore);
-    resolve({ name: ind.name, id: ind.id, score: zScore.toFixed(2), percentile: percentile });
-},
+                        resolve({ name: ind.name, id: ind.id, score: z.toFixed(2), percentile: zToPercentile(z) });
+                    },
                     error: () => resolve({ name: ind.name, id: ind.id, score: "Error", percentile: "NA" })
                 });
             });
         });
 
-        // 6. Final Rendering
         Promise.all(promises).then(orderedResults => {
             resultsBody.innerHTML = ""; 
-            orderedResults.forEach(res => {
-                appendResultRow(res.name, res.id, res.score, res.percentile);
-            });
+            orderedResults.forEach(res => appendResultRow(res.name, res.id, res.score, res.percentile));
         });
     }
 
-    // 7. Styling and Flagging (WHO Table Specs)
     function appendResultRow(name, id, score, percentile) {
         const resultsBody = document.getElementById('multi-results');
         const zNum = parseFloat(score);
-        
-        let cellBase = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-block; min-width: 60px; text-align: center;";
-        let zColor = "#0056b3", zBg = "transparent", pColor = "#666", pBg = "transparent", label = "";
+        let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-block; min-width: 60px; text-align: center;";
+        let zC = "#0056b3", zB = "transparent", pC = "#666", pB = "transparent", lab = "";
 
         if (score !== 'NA' && !isNaN(zNum)) {
-            const limits = { wfa: {l: -6, h: 5}, hfa: {l: -6, h: 6}, bmi: {l: -5, h: 5} };
-            const limit = limits[id];
-
-            if (zNum < limit.l || zNum > limit.h) {
-                zBg = "#ffcccc"; zColor = "#d9534f"; label = " (Flagged)";
-            } else if (zNum < -3 || zNum > 3) {
-                zBg = "#333"; zColor = "#fff"; pBg = "#333"; pColor = "#fff"; label = " (Extreme)";
-            } else if (Math.abs(zNum) > 2) {
-                zBg = "#ff0000"; zColor = "#fff"; // Red
-            } else if (Math.abs(zNum) > 1) {
-                zBg = "#FFD700"; zColor = "#000"; // Gold
-            } else {
-                zBg = "#90EE90"; zColor = "#000"; // Green
-            }
+            const lim = { wfa: {l: -6, h: 5}, hfa: {l: -6, h: 6}, bmi: {l: -5, h: 5} };
+            const l = lim[id];
+            if (zNum < l.l || zNum > l.h) { zB = "#ffcccc"; zC = "#d9534f"; lab = " (Flagged)"; }
+            else if (zNum < -3 || zNum > 3) { zB = "#333"; zC = "#fff"; pB = "#333"; pC = "#fff"; lab = " (Extreme)"; }
+            else if (Math.abs(zNum) > 2) { zB = "#ff0000"; zC = "#fff"; }
+            else if (Math.abs(zNum) > 1) { zB = "#FFD700"; zC = "#000"; }
+            else { zB = "#90EE90"; zC = "#000"; }
         }
 
-        resultsBody.innerHTML += `
-            <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 10px;">${name}</td>
-                <td style="padding: 5px;"><div style="${cellBase} background-color: ${zBg}; color: ${zColor};">${score}${label}</div></td>
-                <td style="padding: 5px;"><div style="${cellBase} background-color: ${pBg}; color: ${pColor};">${percentile}</div></td>
-            </tr>`;
+        resultsBody.innerHTML += `<tr><td style="padding: 10px;">${name}</td><td><div style="${base} background-color: ${zB}; color: ${zC};">${score}${lab}</div></td><td><div style="${base} background-color: ${pB}; color: ${pC};">${percentile}</div></td></tr>`;
     }
 
-    // 8. Live BMI Display
-    function updateBMI() {
-        const weight = parseFloat(document.getElementById('weight').value);
-        const height = parseFloat(document.getElementById('height').value);
-        const oedema = document.getElementById('oedema').value;
-        const display = document.getElementById('bmiDisplay');
-        
-        if (!isNaN(weight) && !isNaN(height) && height > 0 && oedema !== 'y') {
-            const bmi = weight / Math.pow(height / 100, 2);
-            display.innerText = `Current BMI: ${bmi.toFixed(2)}`;
-        } else {
-            display.innerText = "";
-        }
-    }
-
-    document.getElementById('weight').addEventListener('input', updateBMI);
-    document.getElementById('height').addEventListener('input', updateBMI);
-    document.getElementById('oedema').addEventListener('change', updateBMI);
-
-    // 9. Percentile Calculation (NA beyond +/- 3 SD)
     function zToPercentile(z) {
-        if (z === "NA" || isNaN(z)) return "NA";
+        if (z === "NA" || isNaN(z) || z < -3 || z > 3) return "NA";
         const zNum = parseFloat(z);
-        if (zNum < -3 || zNum > 3) return "NA";
-
         const t = 1 / (1 + 0.2316419 * Math.abs(zNum));
         const d = 0.3989423 * Math.exp(-zNum * zNum / 2);
         let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
         if (zNum > 0) p = 1 - p;
         return (p * 100).toFixed(1) + "th";
     }
+
+    function updateBMI() {
+        const w = parseFloat(document.getElementById('weight').value);
+        const h = parseFloat(document.getElementById('height').value);
+        const o = document.getElementById('oedema').value;
+        const d = document.getElementById('bmiDisplay');
+        if (!isNaN(w) && !isNaN(h) && h > 0 && o !== 'y') d.innerText = `BMI: ${(w / Math.pow(h / 100, 2)).toFixed(2)}`;
+        else d.innerText = "";
+    }
+    document.getElementById('weight').addEventListener('input', updateBMI);
+    document.getElementById('height').addEventListener('input', updateBMI);
+    document.getElementById('oedema').addEventListener('change', updateBMI);
 </script>
 </body>
 </html>
