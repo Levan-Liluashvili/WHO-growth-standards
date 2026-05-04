@@ -207,22 +207,56 @@
         });
 
         // 6. Wait for all and render
-        Promise.all(promises).then(orderedResults => {
-            resultsBody.innerHTML = ""; 
-            orderedResults.forEach(res => {
-                appendResultRow(res.name, res.score, res.percentile);
-            });
-        });
+// Render results with the ID included for flag logic
+Promise.all(promises).then(orderedResults => {
+    resultsBody.innerHTML = ""; 
+    orderedResults.forEach(res => {
+        // Add 'res.id' here so the function knows which limits to use
+        appendResultRow(res.name, res.id, res.score, res.percentile);
+    });
+});
     }
 
-    function appendResultRow(name, score, percentile) {
-        const resultsBody = document.getElementById('multi-results');
-        resultsBody.innerHTML += `
-            <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 8px;">${name}</td>
-                <td style="padding: 8px; font-weight: bold; color: ${score === 'NA' ? '#dc3545' : '#0056b3'};">${score}</td>
-                <td style="padding: 8px; color: #666;">${percentile}</td>
-            </tr>`;
+function appendResultRow(name, id, score, percentile) {
+    const resultsBody = document.getElementById('multi-results');
+    const zNum = parseFloat(score);
+    
+    // Default Styles
+    let bgColor = "transparent";
+    let textColor = "#0056b3";
+    let label = "";
+
+    if (score !== 'NA' && !isNaN(zNum)) {
+        // 1. Define Flag Limits from WHO Manual
+        const limits = {
+            wfa: { low: -6, high: 5 },  // Weight-for-age
+            hfa: { low: -6, high: 6 },  // Height-for-age
+            bmi: { low: -5, high: 5 },  // BMI-for-age
+            wfh: { low: -5, high: 5 }   // Weight-for-height
+        };
+
+        const limit = limits[id];
+
+        // 2. Check for Implausible Flags (Values beyond WHO limits)
+        if (zNum < limit.low || zNum > limit.high) {
+            bgColor = "#ffcccc"; // Light red alert for errors
+            textColor = "#d9534f";
+            label = " (Flagged)";
+        } 
+        // 3. Check for Extreme Nutritional Status (±3 SD)
+        else if (zNum < -3 || zNum > 3) {
+            bgColor = "#333"; // Black background as per manual
+            textColor = "#fff";
+            label = " (Extreme)";
+        }
+    }
+
+    resultsBody.innerHTML += `
+        <tr style="border-bottom: 1px solid #eee; background-color: ${bgColor}; transition: background 0.3s;">
+            <td style="padding: 10px;">${name}</td>
+            <td style="padding: 10px; font-weight: bold; color: ${textColor};">${score}${label}</td>
+            <td style="padding: 10px; color: ${bgColor === '#333' ? '#bbb' : '#666'};">${percentile}</td>
+        </tr>`;
     }
 
     function updateBMI() {
