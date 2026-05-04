@@ -99,7 +99,11 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
-async function calculate() {
+<script>
+    // 1. Set default measurement date to today on page load
+    document.getElementById('dom').valueAsDate = new Date();
+
+    async function calculate() {
         const sex = document.getElementById('sex').value;
         const dob = new Date(document.getElementById('dob').value);
         const dom = new Date(document.getElementById('dom').value);
@@ -110,6 +114,7 @@ async function calculate() {
 
         if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
 
+        // 2. Age Logic (WHO Anthro Protocol)
         const ageDaysRaw = (dom - dob) / (1000 * 60 * 60 * 24);
         const ageDays = Math.round(ageDaysRaw); 
         if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
@@ -120,6 +125,7 @@ async function calculate() {
 
         document.getElementById('ageDisplay').innerText = `Age: ${displayYears} yr ${displayMonths} mo (${totalMonths} mo)`;
 
+        // 3. Length/Height correction (clenhei)
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') {
             clenhei += 0.7; 
@@ -127,16 +133,27 @@ async function calculate() {
             clenhei -= 0.7; 
         }
 
+        // 4. Define Indicators (WFH excluded as requested)
         const indicatorConfig = [
-            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN },
             { id: 'hfa', name: 'Height-for-age', val: !isNaN(clenhei) ? clenhei : NaN },
-            { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && totalMonths <= 120 && oedema !== 'y') ? weight : NaN },
+            { 
+                id: 'wfa', 
+                name: 'Weight-for-age', 
+                val: (!isNaN(weight) && totalMonths <= 120 && oedema !== 'y') ? weight : NaN 
+            },
+            { 
+                id: 'bmi', 
+                name: 'BMI-for-age', 
+                val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN 
+            }
         ];
 
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
 
+        // 5. Create Calculation Promises
         const promises = indicatorConfig.map(ind => {
+            // Absolute limit of 19 years (228 months)
             if (totalMonths > 228 || isNaN(ind.val)) {
                 return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
             }
@@ -151,6 +168,8 @@ async function calculate() {
                     dynamicTyping: true,
                     complete: function(results) {
                         const data = results.data.filter(row => row.L !== undefined);
+                        
+                        // Age-based lookup: Days for 0-5, Months for 5-19
                         let lookupCol = (totalMonths <= 60) ? 'Day' : 'Month';
                         let target = (totalMonths <= 60) ? ageDays : totalMonths;
 
@@ -158,16 +177,16 @@ async function calculate() {
                             (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
                         );
 
-                        // --- WHO LMS & TAIL ADJUSTMENT START ---
+                        // --- WHO LMS & TAIL ADJUSTMENT ---
                         const L = match.L;
                         const M = match.M;
                         const S = match.S;
                         const y = ind.val;
 
-                        // 1. Initial LMS Z-score
+                        // Initial LMS Z-score
                         let zScore = (Math.pow((y / M), L) - 1) / (L * S);
 
-                        // 2. Apply WHO 2007 Tail Correction (5-19y, Weight-based only)
+                        // WHO 2007 Tail Correction for Weight/BMI (5-19y)
                         if (totalMonths > 60 && ind.id !== 'hfa') {
                             if (zScore > 3) {
                                 const sd3pos = M * Math.pow(1 + L * S * 3, 1 / L);
@@ -181,7 +200,6 @@ async function calculate() {
                                 zScore = -3 + (y - sd3neg) / sd23neg;
                             }
                         }
-                        // --- WHO LMS & TAIL ADJUSTMENT END ---
 
                         const percentile = zToPercentile(zScore);
                         resolve({ name: ind.name, id: ind.id, score: zScore.toFixed(2), percentile: percentile });
@@ -191,6 +209,7 @@ async function calculate() {
             });
         });
 
+        // 6. Final Rendering
         Promise.all(promises).then(orderedResults => {
             resultsBody.innerHTML = ""; 
             orderedResults.forEach(res => {
@@ -198,72 +217,41 @@ async function calculate() {
             });
         });
     }
-    // 7. Flagging System (0-19 years)
-   function appendResultRow(name, id, score, percentile) {
-    const resultsBody = document.getElementById('multi-results');
-    const zNum = parseFloat(score);
-    
-    // Default Styling
-    let cellStyle = "padding: 10px; font-weight: bold; border-radius: 4px;";
-    let zColor = "#0056b3"; // Default blue
-    let zBg = "transparent";
-    let pColor = "#666";
-    let pBg = "transparent";
-    let label = "";
 
-    if (score !== 'NA' && !isNaN(zNum)) {
-        const limits = {
-            wfa: { low: -6, high: 5 },
-            hfa: { low: -6, high: 6 },
-            bmi: { low: -5, high: 5 },
-            wfh: { low: -5, high: 5 }
-        };
-        const limit = limits[id];
+    // 7. Styling and Flagging (WHO Table Specs)
+    function appendResultRow(name, id, score, percentile) {
+        const resultsBody = document.getElementById('multi-results');
+        const zNum = parseFloat(score);
+        
+        let cellBase = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-block; min-width: 60px; text-align: center;";
+        let zColor = "#0056b3", zBg = "transparent", pColor = "#666", pBg = "transparent", label = "";
 
-        // 1. Determine Color based on WHO Table
-        if (zNum < limit.low || zNum > limit.high) {
-            // Flagged (Implausible)
-            zBg = "#ffcccc"; 
-            zColor = "#d9534f";
-            label = " (Flagged)";
-        } else if (zNum < -3 || zNum > 3) {
-            // Black Range (Extreme)
-            zBg = "#333"; 
-            zColor = "#fff";
-            pBg = "#333";
-            pColor = "#fff";
-            label = " (Extreme)";
-        } else if (Math.abs(zNum) > 2) {
-            // Red Range
-            zBg = "#ff0000";
-            zColor = "#fff";
-        } else if (Math.abs(zNum) > 1) {
-            // Gold Range
-            zBg = "#FFD700";
-            zColor = "#000";
-        } else {
-            // Green Range
-            zBg = "#90EE90";
-            zColor = "#000";
+        if (score !== 'NA' && !isNaN(zNum)) {
+            const limits = { wfa: {l: -6, h: 5}, hfa: {l: -6, h: 6}, bmi: {l: -5, h: 5} };
+            const limit = limits[id];
+
+            if (zNum < limit.l || zNum > limit.h) {
+                zBg = "#ffcccc"; zColor = "#d9534f"; label = " (Flagged)";
+            } else if (zNum < -3 || zNum > 3) {
+                zBg = "#333"; zColor = "#fff"; pBg = "#333"; pColor = "#fff"; label = " (Extreme)";
+            } else if (Math.abs(zNum) > 2) {
+                zBg = "#ff0000"; zColor = "#fff"; // Red
+            } else if (Math.abs(zNum) > 1) {
+                zBg = "#FFD700"; zColor = "#000"; // Gold
+            } else {
+                zBg = "#90EE90"; zColor = "#000"; // Green
+            }
         }
+
+        resultsBody.innerHTML += `
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px;">${name}</td>
+                <td style="padding: 5px;"><div style="${cellBase} background-color: ${zBg}; color: ${zColor};">${score}${label}</div></td>
+                <td style="padding: 5px;"><div style="${cellBase} background-color: ${pBg}; color: ${pColor};">${percentile}</div></td>
+            </tr>`;
     }
 
-    resultsBody.innerHTML += `
-        <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 10px; color: #333;">${name}</td>
-            <td style="padding: 5px;">
-                <div style="${cellStyle} background-color: ${zBg}; color: ${zColor};">
-                    ${score}${label}
-                </div>
-            </td>
-            <td style="padding: 5px;">
-                <div style="${cellStyle} background-color: ${pBg}; color: ${pColor};">
-                    ${percentile}
-                </div>
-            </td>
-        </tr>`;
-}
-
+    // 8. Live BMI Display
     function updateBMI() {
         const weight = parseFloat(document.getElementById('weight').value);
         const height = parseFloat(document.getElementById('height').value);
@@ -272,7 +260,7 @@ async function calculate() {
         
         if (!isNaN(weight) && !isNaN(height) && height > 0 && oedema !== 'y') {
             const bmi = weight / Math.pow(height / 100, 2);
-            display.innerText = `BMI: ${bmi.toFixed(2)}`;
+            display.innerText = `Current BMI: ${bmi.toFixed(2)}`;
         } else {
             display.innerText = "";
         }
@@ -282,10 +270,10 @@ async function calculate() {
     document.getElementById('height').addEventListener('input', updateBMI);
     document.getElementById('oedema').addEventListener('change', updateBMI);
 
+    // 9. Percentile Calculation (NA beyond +/- 3 SD)
     function zToPercentile(z) {
         if (z === "NA" || isNaN(z)) return "NA";
         const zNum = parseFloat(z);
-        // AnthroPlus standard: suppress percentiles outside +/- 3 SD
         if (zNum < -3 || zNum > 3) return "NA";
 
         const t = 1 / (1 + 0.2316419 * Math.abs(zNum));
