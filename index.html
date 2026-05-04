@@ -88,7 +88,7 @@
                     <th style="padding: 8px;">Indicator</th>
                     <th style="padding: 8px;">Z-Score</th>
                     <th style="padding: 8px;">Percentile</th>
-                    <th style="padding: 8px;">Interpretation (0-5y)</th>
+                    <th style="padding: 8px;">Interpretation</th>
                 </tr>
             </thead>
             <tbody id="multi-results">
@@ -105,9 +105,13 @@
     });
 
     // Global Interpretation Helper
-    function getInterpretation05(id, z) {
-        if (z === "NA" || isNaN(z)) return { text: "", note: "" };
-        const zNum = parseFloat(z);
+function getInterpretation(id, z, ageDays) {
+    if (z === "NA" || isNaN(z)) return { text: "", note: "" };
+    const zNum = parseFloat(z);
+    const isUnder5 = ageDays <= 1826;
+
+    // Under 5 Years (0-60 Months)
+    if (isUnder5) {
         const notes = {
             n1: "Note 1: A child in this range is very tall. Tallness is rarely a problem, unless it is so excessive that it may indicate an endocrine disorder such as a growth-hormone-producing tumor. Refer a child in this range for assessment if you suspect an endocrine disorder (e.g. if parents of normal height have a child who is excessively tall for his or her age).",
             n2: "Note 2: A child whose weight-for-age falls in this range may have a growth problem, but this is better assessed from weight-for-length/height or BMI-for-age.",
@@ -133,8 +137,26 @@
             if (zNum < -3) return { text: "Severely wasted", note: "" };
             if (zNum < -2) return { text: "Wasted", note: "" };
         }
-        return { text: "Normal-range", note: "" };
+    } 
+    // 5 to 19 Years (1827 - 6939 Days)
+    else {
+        if (id === 'hfa') {
+            if (zNum < -3) return { text: "Severely stunted", note: "" };
+            if (zNum < -2) return { text: "Stunted", note: "" };
+        }
+        if (id === 'wfa' && ageDays <= 3652) { // Only up to 10 years
+            if (zNum < -3) return { text: "Severely underweight", note: "" };
+            if (zNum < -2) return { text: "Underweight", note: "" };
+        }
+        if (id === 'bmi') {
+            if (zNum > 2) return { text: "Obese", note: "" };
+            if (zNum > 1) return { text: "Overweight", note: "" };
+            if (zNum < -3) return { text: "Severely thin", note: "" };
+            if (zNum < -2) return { text: "Thin", note: "" };
+        }
     }
+    return { text: "Normal Range", note: "" };
+}
 
     async function calculate() {
         const sex = document.getElementById('sex').value;
@@ -229,7 +251,7 @@
     function appendResultRow(name, id, score, percentile, ageDays) {
         const resultsBody = document.getElementById('multi-results');
         const zNum = parseFloat(score);
-        let interp = (ageDays <= 1826) ? getInterpretation05(id, score) : { text: "", note: "" };
+        let interp = getInterpretation(id, score, ageDays);
 
         let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-block; min-width: 60px; text-align: center;";
         let zC = "#0056b3", zB = "transparent", pC = "#666", pB = "transparent", lab = "";
@@ -244,16 +266,16 @@
             else { zB = "#90EE90"; zC = "#000"; }
         }
 
-        resultsBody.innerHTML += `
-            <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 10px;">${name}</td>
-                <td><div style="${base} background-color: ${zB}; color: ${zC};">${score}${lab}</div></td>
-                <td><div style="${base} background-color: ${pB}; color: ${pC};">${percentile}</div></td>
-                <td style="padding: 10px; cursor: help;" title="${interp.note}">
-                    <span style="${interp.note ? 'border-bottom: 1px dotted #999;' : ''}">${interp.text}</span>
-                </td>
-            </tr>`;
-    }
+resultsBody.innerHTML += `
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 10px;">${name}</td>
+            <td><div style="${base} background-color: ${zB}; color: ${zC};">${score}${lab}</div></td>
+            <td><div style="${base} background-color: ${pB}; color: ${pC};">${percentile}</div></td>
+            <td style="padding: 10px; cursor: help;" title="${interp.note}">
+                <span style="${interp.note ? 'border-bottom: 1px dotted #999;' : ''}">${interp.text}</span>
+            </td>
+        </tr>`;
+}
 
     function zToPercentile(z) {
         if (z === "NA" || isNaN(z) || z < -3 || z > 3) return "NA";
