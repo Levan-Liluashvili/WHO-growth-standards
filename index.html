@@ -99,9 +99,11 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
+    // Set default date
     document.getElementById('dom').valueAsDate = new Date();
 
     async function calculate() {
+        // 1. Get Input Values
         const sex = document.getElementById('sex').value;
         const dob = new Date(document.getElementById('dob').value);
         const dom = new Date(document.getElementById('dom').value);
@@ -110,21 +112,22 @@
         const measure = document.getElementById('measure').value;
         const oedema = document.getElementById('oedema').value;
 
+        // Date Validation
         if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
 
-        // 1. Age Calculation (WHO Anthro Manual Logic)
+        // 2. Age Logic (WHO Anthro Manual)
         const ageDaysRaw = (dom - dob) / (1000 * 60 * 60 * 24);
-        const ageDays = Math.round(ageDaysRaw); // Rounding to nearest whole day
+        const ageDays = Math.round(ageDaysRaw); // Rounds 730.5 to 731 per WHO manual
         if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
 
-        // Age in completed months (using 30.4375 principle)
+        // Age in completed months (30.4375 principle)
         const totalMonths = Math.floor(ageDays / 30.4375);
         const displayYears = Math.floor(totalMonths / 12);
         const displayMonths = totalMonths % 12;
 
         document.getElementById('ageDisplay').innerText = `Age: ${displayYears} yr ${displayMonths} mo (${totalMonths} mo)`;
 
-        // 2. clenhei Logic (731 days = 24 months rounding)
+        // 3. clenhei Logic (Height/Length Correction)
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') {
             clenhei += 0.7; 
@@ -132,78 +135,84 @@
             clenhei -= 0.7; 
         }
 
-// 3. Define Indicators with Missing Data & Oedema Logic
-const indicatorConfig = [
-    { 
-        id: 'bmi', 
-        name: 'BMI-for-age', 
-        // BMI requires Weight, Height, and NO Oedema
-        val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN 
-    },
-    { 
-        id: 'hfa', 
-        name: 'Height-for-age', 
-        // HAZ only requires Height (Length)
-        val: !isNaN(clenhei) ? clenhei : NaN 
-    },
-    { 
-        id: 'wfa', 
-        name: 'Weight-for-age', 
-        // WAZ requires Weight and NO Oedema
-        val: (!isNaN(weight) && oedema !== 'y') ? weight : NaN 
-    },
-    { 
-        id: 'wfh', 
-        name: 'Weight-for-height', 
-        // WFH requires Weight, Height, and NO Oedema
-        val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? weight : NaN 
-    }
-];
+        // 4. Define Indicators with Missing Data & Oedema Logic
+        // If Weight is missing or Oedema is Yes, Weight-based indicators become NaN
+        const indicatorConfig = [
+            { 
+                id: 'bmi', 
+                name: 'BMI-for-age', 
+                val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN 
+            },
+            { 
+                id: 'hfa', 
+                name: 'Height-for-age', 
+                val: !isNaN(clenhei) ? clenhei : NaN 
+            },
+            { 
+                id: 'wfa', 
+                name: 'Weight-for-age', 
+                val: (!isNaN(weight) && oedema !== 'y') ? weight : NaN 
+            },
+            { 
+                id: 'wfh', 
+                name: 'Weight-for-height', 
+                val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? weight : NaN 
+            }
+        ];
+
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
 
-const promises = indicatorConfig.map(ind => {
-    const isWeightRelated = (ind.id !== 'hfa');
+        // 5. Create Promises with Age and Data Constraints
+        const promises = indicatorConfig.map(ind => {
+            // AnthroPlus Rule: If age > 228 months, all indicators are NA
+            if (totalMonths > 228) {
+                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
+            }
+            
+            // AnthroPlus Rule: Weight-for-age is NA if age > 120 months
+            if (ind.id === 'wfa' && totalMonths > 120) {
+                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
+            }
 
-    // 1. AnthroPlus Rule: If age > 228 months, everything is NA
-    if (totalMonths > 228) {
-        return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
-    }
-    
-    // 2. AnthroPlus Rule: If age > 120 months, WFA is NA
-    if (ind.id === 'wfa' && totalMonths > 120) {
-        return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
-    }
+            // Missing Data / Oedema Check: If logic in step 4 set val to NaN, return NA
+            if (isNaN(ind.val)) {
+                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
+            }
 
-    // 3. Missing Data / Oedema Check: If val is NaN, return NA
-    if (isNaN(ind.val)) {
-        return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
-    }
-    // Continue with CSV fetching and calculation for valid data
-    return new Promise((resolve) => {
-        const fileName = `data/${ind.id}_${sex}_0_5.csv`;
-        Papa.parse(fileName, {
-            download: true,
-            header: true,
-            dynamicTyping: true,
-            complete: function(results) {
-                const data = results.data.filter(row => row.L !== undefined);
-                const lookupCol = (ind.id === 'wfh') ? 'Centimeters' : 'Day';
-                const target = (ind.id === 'wfh') ? clenhei : ageDays;
+            return new Promise((resolve) => {
+                const fileName = `data/${ind.id}_${sex}_0_5.csv`;
+                Papa.parse(fileName, {
+                    download: true,
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        const data = results.data.filter(row => row.L !== undefined);
+                        const lookupCol = (ind.id === 'wfh') ? 'Centimeters' : 'Day';
+                        const target = (ind.id === 'wfh') ? clenhei : ageDays;
 
-                const match = data.reduce((prev, curr) => 
-                    (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
-                );
+                        const match = data.reduce((prev, curr) => 
+                            (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
+                        );
 
-                const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
-                const percentile = zToPercentile(zScore);
-                
-                resolve({ name: ind.name, score: zScore.toFixed(2), percentile: percentile });
-            },
-            error: () => resolve({ name: ind.name, score: "Error", percentile: "NA" })
+                        // LMS Z-score Calculation
+                        const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
+                        const percentile = zToPercentile(zScore);
+                        
+                        resolve({ name: ind.name, score: zScore.toFixed(2), percentile: percentile });
+                    },
+                    error: () => resolve({ name: ind.name, score: "Error", percentile: "NA" })
+                });
+            });
         });
-    });
-});
+
+        // 6. Wait for all and render
+        Promise.all(promises).then(orderedResults => {
+            resultsBody.innerHTML = ""; 
+            orderedResults.forEach(res => {
+                appendResultRow(res.name, res.score, res.percentile);
+            });
+        });
     }
 
     function appendResultRow(name, score, percentile) {
@@ -219,8 +228,11 @@ const promises = indicatorConfig.map(ind => {
     function updateBMI() {
         const weight = parseFloat(document.getElementById('weight').value);
         const height = parseFloat(document.getElementById('height').value);
+        const oedema = document.getElementById('oedema').value;
         const display = document.getElementById('bmiDisplay');
-        if (!isNaN(weight) && !isNaN(height) && height > 0) {
+        
+        // BMI is not displayed if Oedema is present
+        if (!isNaN(weight) && !isNaN(height) && height > 0 && oedema !== 'y') {
             const bmi = weight / Math.pow(height / 100, 2);
             display.innerText = `BMI: ${bmi.toFixed(2)}`;
         } else {
@@ -230,11 +242,12 @@ const promises = indicatorConfig.map(ind => {
 
     document.getElementById('weight').addEventListener('input', updateBMI);
     document.getElementById('height').addEventListener('input', updateBMI);
+    document.getElementById('oedema').addEventListener('change', updateBMI);
 
     function zToPercentile(z) {
         if (z === "NA" || isNaN(z)) return "NA";
         const zNum = parseFloat(z);
-        // AnthroPlus Manual: Percentiles read NA beyond +/- 3 SD
+        // Percentiles read "NA" for Z-scores < -3 SD or > +3 SD
         if (zNum < -3 || zNum > 3) return "NA";
 
         const t = 1 / (1 + 0.2316419 * Math.abs(zNum));
