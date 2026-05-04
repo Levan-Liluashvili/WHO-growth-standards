@@ -109,15 +109,15 @@
         if (z === "NA" || isNaN(z)) return { text: "", note: "" };
         const zNum = parseFloat(z);
         const notes = {
-            n1: "Note 1: Very tall. Extreme tallness might indicate an endocrine disorder. Referral suggested if parents are normal height.",
-            n2: "Note 2: High weight-for-age is better assessed using BMI-for-age or weight-for-height.",
-            n3: "Note 3: Above +1 SD shows possible risk. A trend towards +2 SD indicates definite risk.",
-            n4: "Note 4: It is possible for a stunted child to also become overweight.",
-            n5: "Note 5: Referred to as 'very low weight' in IMCI modules."
+            n1: "Note 1: A child in this range is very tall. Tallness is rarely a problem, unless it is so excessive that it may indicate an endocrine disorder such as a growth-hormone-producing tumor. Refer a child in this range for assessment if you suspect an endocrine disorder (e.g. if parents of normal height have a child who is excessively tall for his or her age).",
+            n2: "Note 2: A child whose weight-for-age falls in this range may have a growth problem, but this is better assessed from weight-for-length/height or BMI-for-age.",
+            n3: "Note 3: A point above 1 shows possible risk. A trend towards the 2 z-score line shows definite risk.",
+            n4: "Note 4: It is possible for a stunted or severely stunted child to become overweight.",
+            n5: "Note 5: This is referred to as very low weight in IMCI training modules. (Integrated Management of Childhood Illness, In-service training. WHO, Geneva, 1997)."
         };
 
         if (id === 'hfa') {
-            if (zNum > 3) return { text: "Very Tall", note: notes.n1 };
+            if (zNum > 3) return { text: "See Note 1", note: notes.n1 };
             if (zNum < -3) return { text: "Severely stunted", note: notes.n4 };
             if (zNum < -2) return { text: "Stunted", note: notes.n4 };
         }
