@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WHO Anthro-Aligned Calculator</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; max-width: 650px; margin: 40px auto; padding: 20px; background-color: #f4f7f9; }
+        .card { border: 1px solid #e0e0e0; padding: 30px; border-radius: 12px; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h2 { color: #0056b3; margin-top: 0; }
+        .row { display: flex; gap: 15px; margin-bottom: 15px; }
+        .row div { flex: 1; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.85em; color: #555; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; padding: 14px; width: 100%; margin-top: 20px; cursor: pointer; border-radius: 6px; font-size: 1em; font-weight: bold; }
+        button:hover { background: #0056b3; }
+        #result { margin-top: 25px; padding: 20px; border-radius: 8px; background: #f8f9fa; border-left: 6px solid #007bff; }
+        .info-bar { margin-top: 15px; display: flex; justify-content: space-between; font-weight: bold; color: #0056b3; min-height: 1.2em; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Growth Standards Calculator</h2>
+    
+    <div class="row">
+        <div>
+            <label>Sex</label>
+            <select id="sex">
+                <option value="boys">Boy</option>
+                <option value="girls">Girl</option>
+            </select>
+        </div>
+        <div>
+            <label>Oedema</label>
+            <select id="oedema">
+                <option value="n">No</option>
+                <option value="y">Yes</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row">
+        <div>
+            <label>Date of Birth</label>
+            <input type="date" id="dob">
+        </div>
+        <div>
+            <label>Date of Measurement</label>
+            <input type="date" id="dom">
+        </div>
+    </div>
+
+    <div class="row">
+        <div>
+            <label>Measurement Type</label>
+            <select id="measure">
+                <option value="H" selected>H (Standing Height)</option>
+                <option value="L">L (Recumbent Length)</option>
+            </select>
+        </div>
+        <div>
+            <label>Weight (kg)</label>
+            <input type="number" id="weight" step="0.01" placeholder="e.g. 10.5">
+        </div>
+    </div>
+
+    <div class="row">
+        <div>
+            <label>Height/Length (cm)</label>
+            <input type="number" id="height" step="0.1" placeholder="e.g. 85.5">
+        </div>
+        <div style="visibility: hidden;">
+            <label>Spacer</label><input type="text">
+        </div>
+    </div>
+
+    <div class="info-bar">
+        <span id="bmiDisplay"></span>
+        <span id="ageDisplay" style="color: #555; font-size: 0.9em;"></span>
+    </div>
+
+    <button onclick="calculate()">Calculate Z-Score</button>
+
+    <div id="result">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #dee2e6; text-align: left;">
+                    <th style="padding: 8px;">Indicator</th>
+                    <th style="padding: 8px;">Z-Score</th>
+                    <th style="padding: 8px;">Percentile</th>
+                </tr>
+            </thead>
+            <tbody id="multi-results">
+                <tr><td colspan="3" style="padding: 10px; color: #666;">Waiting for input...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+<script>
+    // 1. Initialize Default Date
+    window.addEventListener('DOMContentLoaded', () => {
+        const domInput = document.getElementById('dom');
+        if (domInput) domInput.valueAsDate = new Date();
+    });
+
+    async function calculate() {
+        const sex = document.getElementById('sex').value;
+        const dob = new Date(document.getElementById('dob').value);
+        const dom = new Date(document.getElementById('dom').value);
+        const weight = parseFloat(document.getElementById('weight').value);
+        const height = parseFloat(document.getElementById('height').value);
+        const measure = document.getElementById('measure').value;
+        const oedema = document.getElementById('oedema').value;
+
+        if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
+
+        const ageDaysRaw = (dom - dob) / (1000 * 60 * 60 * 24);
+        const ageDays = Math.round(ageDaysRaw); 
+        if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
+
+        const totalMonths = Math.floor(ageDays / 30.4375);
+        const preciseMonths = ageDays / 30.4375;
+        
+        document.getElementById('ageDisplay').innerText = 
+            `Age: ${Math.floor(totalMonths / 12)} yr ${totalMonths % 12} mo (${totalMonths} mo)`;
+
+        // 2. Length/Height correction
+        let clenhei = height;
+        if (ageDays < 731 && measure === 'H') clenhei += 0.7; 
+        else if (ageDays >= 731 && measure === 'L') clenhei -= 0.7; 
+
+        const indicatorConfig = [
+            { id: 'hfa', name: 'Height-for-age', val: !isNaN(clenhei) ? clenhei : NaN },
+            { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && totalMonths <= 120 && oedema !== 'y') ? weight : NaN },
+            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN }
+        ];
+
+        const resultsBody = document.getElementById('multi-results');
+        resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
+
+        const promises = indicatorConfig.map(ind => {
+            if (totalMonths > 228 || isNaN(ind.val)) {
+                return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
+            }
+
+            return new Promise((resolve) => {
+                const ageSuffix = (totalMonths <= 60) ? "0_5" : "5_19";
+                const fileName = `data/${ind.id}_${sex}_${ageSuffix}.csv`;
+
+                Papa.parse(fileName, {
+                    download: true,
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        const data = results.data.filter(row => row.L !== undefined);
+                        let lookupCol = (totalMonths <= 60) ? 'Day' : 'Month';
+                        let target = (totalMonths <= 60) ? ageDays : preciseMonths;
+
+                        // 3. LINEAR INTERPOLATION OF L, M, S
+                        let r1 = data[0], r2 = data[0];
+                        for (let i = 0; i < data.length - 1; i++) {
+                            if (target >= data[i][lookupCol] && target <= data[i+1][lookupCol]) {
+                                r1 = data[i]; r2 = data[i+1]; break;
+                            }
+                        }
+                        const gap = r2[lookupCol] - r1[lookupCol];
+                        const f = gap === 0 ? 0 : (target - r1[lookupCol]) / gap;
+
+                        const L = r1.L + (r2.L - r1.L) * f;
+                        const M = r1.M + (r2.M - r1.M) * f;
+                        const S = r1.S + (r2.S - r1.S) * f;
+                        const y = ind.val;
+
+                        // 4. Z-SCORE CALCULATION
+                        let z = (Math.pow((y / M), L) - 1) / (L * S);
+
+                        // 5. TAIL ADJUSTMENTS
+                        if (ind.id !== 'hfa') {
+                            if (totalMonths <= 60) {
+                                // WHO 0-5 Adjusted SD method for Skewed Data
+                                if (z > 3) {
+                                    const sd3pos = M * Math.pow(1 + L * S * 3, 1 / L);
+                                    const sd2pos = M * Math.pow(1 + L * S * 2, 1 / L);
+                                    z = 3 + (y - sd3pos) / (sd3pos - sd2pos);
+                                } else if (z < -3) {
+                                    const sd3neg = M * Math.pow(1 + L * S * (-3), 1 / L);
+                                    const sd2neg = M * Math.pow(1 + L * S * (-2), 1 / L);
+                                    z = -3 + (y - sd3neg) / (sd2neg - sd3neg);
+                                }
+                            } else {
+                                // WHO 5-19 Tail Correction (Manual Logic)
+                                if (z > 3) {
+                                    const s3 = M * Math.pow(1 + L * S * 3, 1 / L);
+                                    const s2 = M * Math.pow(1 + L * S * 2, 1 / L);
+                                    z = 3 + (y - s3) / (s3 - s2);
+                                } else if (z < -3) {
+                                    const s3 = M * Math.pow(1 + L * S * (-3), 1 / L);
+                                    const s2 = M * Math.pow(1 + L * S * (-2), 1 / L);
+                                    z = -3 + (y - s3) / (s2 - s3);
+                                }
+                            }
+                        }
+
+                        resolve({ name: ind.name, id: ind.id, score: z.toFixed(2), percentile: zToPercentile(z) });
+                    },
+                    error: () => resolve({ name: ind.name, id: ind.id, score: "Error", percentile: "NA" })
+                });
+            });
+        });
+
+        Promise.all(promises).then(orderedResults => {
+            resultsBody.innerHTML = ""; 
+            orderedResults.forEach(res => appendResultRow(res.name, res.id, res.score, res.percentile));
+        });
+    }
+
+    function appendResultRow(name, id, score, percentile) {
+        const resultsBody = document.getElementById('multi-results');
+        const zNum = parseFloat(score);
+        let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-block; min-width: 60px; text-align: center;";
+        let zC = "#0056b3", zB = "transparent", pC = "#666", pB = "transparent", lab = "";
+
+        if (score !== 'NA' && !isNaN(zNum)) {
+            const lim = { wfa: {l: -6, h: 5}, hfa: {l: -6, h: 6}, bmi: {l: -5, h: 5} };
+            const l = lim[id];
+            if (zNum < l.l || zNum > l.h) { zB = "#ffcccc"; zC = "#d9534f"; lab = " (Flagged)"; }
+            else if (zNum < -3 || zNum > 3) { zB = "#333"; zC = "#fff"; pB = "#333"; pC = "#fff"; lab = " (Extreme)"; }
+            else if (Math.abs(zNum) > 2) { zB = "#ff0000"; zC = "#fff"; }
+            else if (Math.abs(zNum) > 1) { zB = "#FFD700"; zC = "#000"; }
+            else { zB = "#90EE90"; zC = "#000"; }
+        }
+
+        resultsBody.innerHTML += `<tr><td style="padding: 10px;">${name}</td><td><div style="${base} background-color: ${zB}; color: ${zC};">${score}${lab}</div></td><td><div style="${base} background-color: ${pB}; color: ${pC};">${percentile}</div></td></tr>`;
+    }
+
+    function zToPercentile(z) {
+        if (z === "NA" || isNaN(z) || z < -3 || z > 3) return "NA";
+        const zNum = parseFloat(z);
+        const t = 1 / (1 + 0.2316419 * Math.abs(zNum));
+        const d = 0.3989423 * Math.exp(-zNum * zNum / 2);
+        let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+        if (zNum > 0) p = 1 - p;
+        return (p * 100).toFixed(1) + "th";
+    }
+
+    function updateBMI() {
+        const w = parseFloat(document.getElementById('weight').value);
+        const h = parseFloat(document.getElementById('height').value);
+        const o = document.getElementById('oedema').value;
+        const d = document.getElementById('bmiDisplay');
+        if (!isNaN(w) && !isNaN(h) && h > 0 && o !== 'y') d.innerText = `BMI: ${(w / Math.pow(h / 100, 2)).toFixed(2)}`;
+        else d.innerText = "";
+    }
+    document.getElementById('weight').addEventListener('input', updateBMI);
+    document.getElementById('height').addEventListener('input', updateBMI);
+    document.getElementById('oedema').addEventListener('change', updateBMI);
+</script>
+</body>
+</html>
