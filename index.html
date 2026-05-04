@@ -99,11 +99,10 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
-    // Set default date
+    // 1. Set default date
     document.getElementById('dom').valueAsDate = new Date();
 
     async function calculate() {
-        // 1. Get Input Values
         const sex = document.getElementById('sex').value;
         const dob = new Date(document.getElementById('dob').value);
         const dom = new Date(document.getElementById('dom').value);
@@ -112,22 +111,20 @@
         const measure = document.getElementById('measure').value;
         const oedema = document.getElementById('oedema').value;
 
-        // Date Validation
         if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
 
         // 2. Age Logic (WHO Anthro Manual)
         const ageDaysRaw = (dom - dob) / (1000 * 60 * 60 * 24);
-        const ageDays = Math.round(ageDaysRaw); // Rounds 730.5 to 731 per WHO manual
+        const ageDays = Math.round(ageDaysRaw); 
         if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
 
-        // Age in completed months (30.4375 principle)
         const totalMonths = Math.floor(ageDays / 30.4375);
         const displayYears = Math.floor(totalMonths / 12);
         const displayMonths = totalMonths % 12;
 
         document.getElementById('ageDisplay').innerText = `Age: ${displayYears} yr ${displayMonths} mo (${totalMonths} mo)`;
 
-        // 3. clenhei Logic (Height/Length Correction)
+        // 3. clenhei Logic
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') {
             clenhei += 0.7; 
@@ -135,50 +132,23 @@
             clenhei -= 0.7; 
         }
 
-        // 4. Define Indicators with Missing Data & Oedema Logic
-        // If Weight is missing or Oedema is Yes, Weight-based indicators become NaN
+        // 4. Define Indicators with AnthroPlus constraints
         const indicatorConfig = [
-            { 
-                id: 'bmi', 
-                name: 'BMI-for-age', 
-                val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN 
-            },
-            { 
-                id: 'hfa', 
-                name: 'Height-for-age', 
-                val: !isNaN(clenhei) ? clenhei : NaN 
-            },
-            { 
-                id: 'wfa', 
-                name: 'Weight-for-age', 
-                val: (!isNaN(weight) && oedema !== 'y') ? weight : NaN 
-            },
-            { 
-                id: 'wfh', 
-                name: 'Weight-for-height', 
-                val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? weight : NaN 
-            }
+            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN },
+            { id: 'hfa', name: 'Height-for-age', val: !isNaN(clenhei) ? clenhei : NaN },
+            { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && oedema !== 'y') ? weight : NaN },
+            { id: 'wfh', name: 'Weight-for-height', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? weight : NaN }
         ];
 
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
 
-        // 5. Create Promises with Age and Data Constraints
+        // 5. Create Promises
         const promises = indicatorConfig.map(ind => {
-            // AnthroPlus Rule: If age > 228 months, all indicators are NA
-            if (totalMonths > 228) {
-                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
-            }
-            
-            // AnthroPlus Rule: Weight-for-age is NA if age > 120 months
-            if (ind.id === 'wfa' && totalMonths > 120) {
-                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
-            }
-
-            // Missing Data / Oedema Check: If logic in step 4 set val to NaN, return NA
-            if (isNaN(ind.val)) {
-                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
-            }
+            // Check Age Rules first
+            if (totalMonths > 228) return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
+            if (ind.id === 'wfa' && totalMonths > 120) return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
+            if (isNaN(ind.val)) return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
 
             return new Promise((resolve) => {
                 const fileName = `data/${ind.id}_${sex}_0_5.csv`;
@@ -195,68 +165,66 @@
                             (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
                         );
 
-                        // LMS Z-score Calculation
                         const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
                         const percentile = zToPercentile(zScore);
                         
-                        resolve({ name: ind.name, score: zScore.toFixed(2), percentile: percentile });
+                        // IMPORTANT: Include the ID in the resolve
+                        resolve({ name: ind.name, id: ind.id, score: zScore.toFixed(2), percentile: percentile });
                     },
-                    error: () => resolve({ name: ind.name, score: "Error", percentile: "NA" })
+                    error: () => resolve({ name: ind.name, id: ind.id, score: "Error", percentile: "NA" })
                 });
             });
         });
 
-        // 6. Wait for all and render
-// Render results with the ID included for flag logic
-Promise.all(promises).then(orderedResults => {
-    resultsBody.innerHTML = ""; 
-    orderedResults.forEach(res => {
-        // Add 'res.id' here so the function knows which limits to use
-        appendResultRow(res.name, res.id, res.score, res.percentile);
-    });
-});
+        // 6. Final Render
+        Promise.all(promises).then(orderedResults => {
+            resultsBody.innerHTML = ""; 
+            orderedResults.forEach(res => {
+                appendResultRow(res.name, res.id, res.score, res.percentile);
+            });
+        });
     }
 
-function appendResultRow(name, id, score, percentile) {
-    const resultsBody = document.getElementById('multi-results');
-    const zNum = parseFloat(score);
-    
-    // Default Styles
-    let bgColor = "transparent";
-    let textColor = "#0056b3";
-    let label = "";
+    // 7. Flagging System (0-19 years)
+    function appendResultRow(name, id, score, percentile) {
+        const resultsBody = document.getElementById('multi-results');
+        const zNum = parseFloat(score);
+        
+        let bgColor = "transparent";
+        let textColor = "#0056b3";
+        let label = "";
 
-    if (score !== 'NA' && !isNaN(zNum)) {
-        // 1. Define Flag Limits from WHO Manual
-        const limits = {
-            wfa: { low: -6, high: 5 },  // Weight-for-age
-            hfa: { low: -6, high: 6 },  // Height-for-age
-            bmi: { low: -5, high: 5 },  // BMI-for-age
-            wfh: { low: -5, high: 5 }   // Weight-for-height
-        };
+        if (score !== 'NA' && !isNaN(zNum)) {
+            // Flag Limits per WHO Manual
+            const limits = {
+                wfa: { low: -6, high: 5 },
+                hfa: { low: -6, high: 6 },
+                bmi: { low: -5, high: 5 },
+                wfh: { low: -5, high: 5 }
+            };
 
-        const limit = limits[id];
+            const limit = limits[id];
 
-        // 2. Check for Implausible Flags (Values beyond WHO limits)
-        if (zNum < limit.low || zNum > limit.high) {
-            bgColor = "#ffcccc"; // Light red alert for errors
-            textColor = "#d9534f";
-            label = " (Flagged)";
-        } 
-        // 3. Check for Extreme Nutritional Status (±3 SD)
-        else if (zNum < -3 || zNum > 3) {
-            bgColor = "#333"; // Black background as per manual
-            textColor = "#fff";
-            label = " (Extreme)";
+            // Check for Implausible Flags
+            if (zNum < limit.low || zNum > limit.high) {
+                bgColor = "#ffcccc"; 
+                textColor = "#d9534f";
+                label = " (Flagged)";
+            } 
+            // Check for Extreme Status (±3 SD)
+            else if (zNum < -3 || zNum > 3) {
+                bgColor = "#333"; 
+                textColor = "#fff";
+                label = " (Extreme)";
+            }
         }
-    }
 
-    resultsBody.innerHTML += `
-        <tr style="border-bottom: 1px solid #eee; background-color: ${bgColor}; transition: background 0.3s;">
-            <td style="padding: 10px;">${name}</td>
-            <td style="padding: 10px; font-weight: bold; color: ${textColor};">${score}${label}</td>
-            <td style="padding: 10px; color: ${bgColor === '#333' ? '#bbb' : '#666'};">${percentile}</td>
-        </tr>`;
+        resultsBody.innerHTML += `
+            <tr style="border-bottom: 1px solid #eee; background-color: ${bgColor}; transition: background 0.3s;">
+                <td style="padding: 10px;">${name}</td>
+                <td style="padding: 10px; font-weight: bold; color: ${textColor};">${score}${label}</td>
+                <td style="padding: 10px; color: ${bgColor === '#333' ? '#bbb' : '#666'};">${percentile}</td>
+            </tr>`;
     }
 
     function updateBMI() {
@@ -265,7 +233,6 @@ function appendResultRow(name, id, score, percentile) {
         const oedema = document.getElementById('oedema').value;
         const display = document.getElementById('bmiDisplay');
         
-        // BMI is not displayed if Oedema is present
         if (!isNaN(weight) && !isNaN(height) && height > 0 && oedema !== 'y') {
             const bmi = weight / Math.pow(height / 100, 2);
             display.innerText = `BMI: ${bmi.toFixed(2)}`;
@@ -281,7 +248,7 @@ function appendResultRow(name, id, score, percentile) {
     function zToPercentile(z) {
         if (z === "NA" || isNaN(z)) return "NA";
         const zNum = parseFloat(z);
-        // Percentiles read "NA" for Z-scores < -3 SD or > +3 SD
+        // AnthroPlus standard: suppress percentiles outside +/- 3 SD
         if (zNum < -3 || zNum > 3) return "NA";
 
         const t = 1 / (1 + 0.2316419 * Math.abs(zNum));
