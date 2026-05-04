@@ -97,7 +97,6 @@
         </table>
     </div>
 </div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
     window.addEventListener('DOMContentLoaded', () => {
@@ -105,11 +104,10 @@
         if (domInput) domInput.valueAsDate = new Date();
     });
 
-    // Helper for Interpretations (Moved out of calculate to prevent syntax errors)
+    // Global Interpretation Helper
     function getInterpretation05(id, z) {
         if (z === "NA" || isNaN(z)) return { text: "", note: "" };
         const zNum = parseFloat(z);
-
         const notes = {
             n1: "Note 1: Very tall. Extreme tallness might indicate an endocrine disorder. Referral suggested if parents are normal height.",
             n2: "Note 2: High weight-for-age is better assessed using BMI-for-age or weight-for-height.",
@@ -135,7 +133,7 @@
             if (zNum < -3) return { text: "Severely wasted", note: "" };
             if (zNum < -2) return { text: "Wasted", note: "" };
         }
-        return { text: "Normal-range", note: "" };
+        return { text: "Normal", note: "" };
     }
 
     async function calculate() {
@@ -152,6 +150,8 @@
         const ageDays = Math.round((dom - dob) / (1000 * 60 * 60 * 24));
         if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
 
+        // STRICT 5-YEAR CUTOFF (1826 Days)
+        const isUnder5 = ageDays <= 1826; 
         const totalMonths = Math.floor(ageDays / 30.4375);
         const preciseMonths = ageDays / 30.4375;
         
@@ -163,7 +163,7 @@
 
         const indicatorConfig = [
             { id: 'hfa', name: 'Height-for-age', val: !isNaN(clenhei) ? clenhei : NaN },
-            { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && totalMonths <= 120 && oedema !== 'y') ? weight : NaN },
+            { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && ageDays <= 3652 && oedema !== 'y') ? weight : NaN },
             { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN }
         ];
 
@@ -171,20 +171,20 @@
         resultsBody.innerHTML = "<tr><td colspan='4' style='padding: 10px;'>Calculating...</td></tr>"; 
 
         const promises = indicatorConfig.map(ind => {
-            if (totalMonths > 228 || isNaN(ind.val)) {
+            if (ageDays > 6939 || isNaN(ind.val)) {
                 return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
             }
 
             return new Promise((resolve) => {
-                const ageSuffix = (totalMonths <= 60) ? "0_5" : "5_19";
+                const ageSuffix = isUnder5 ? "0_5" : "5_19";
                 const fileName = `data/${ind.id}_${sex}_${ageSuffix}.csv`;
 
                 Papa.parse(fileName, {
                     download: true, header: true, dynamicTyping: true,
                     complete: function(results) {
                         const data = results.data.filter(row => row.L !== undefined);
-                        let lookupCol = (totalMonths <= 60) ? 'Day' : 'Month';
-                        let target = (totalMonths <= 60) ? ageDays : preciseMonths;
+                        let lookupCol = isUnder5 ? 'Day' : 'Month';
+                        let target = isUnder5 ? ageDays : preciseMonths;
 
                         let r1 = data[0], r2 = data[0];
                         for (let i = 0; i < data.length - 1; i++) {
@@ -198,20 +198,19 @@
                         const L = r1.L + (r2.L - r1.L) * f;
                         const M = r1.M + (r2.M - r1.M) * f;
                         const S = r1.S + (r2.S - r1.S) * f;
-                        const y = ind.val;
+                        
+                        let z = (Math.pow((ind.val / M), L) - 1) / (L * S);
 
-                        let z = (Math.pow((y / M), L) - 1) / (L * S);
-
+                        // Tail Adjustments (matching WHO Software logic)
                         if (ind.id !== 'hfa') {
                             if (z > 3) {
                                 const s3 = M * Math.pow(1 + L * S * 3, 1 / L);
                                 const s2 = M * Math.pow(1 + L * S * 2, 1 / L);
-                                z = 3 + (y - s3) / (s3 - s2);
+                                z = 3 + (ind.val - s3) / (s3 - s2);
                             } else if (z < -3) {
                                 const s3 = M * Math.pow(1 + L * S * (-3), 1 / L);
                                 const s2 = M * Math.pow(1 + L * S * (-2), 1 / L);
-                                z = -3 + (y - s3) / (totalMonths <= 60 ? (s2 - s3) : (s2 - s3)); // Symmetrical for 0-5 skew
-                                if(totalMonths <= 60) z = -3 + (y - s3) / (M * Math.pow(1 + L * S * (-2), 1/L) - s3);
+                                z = -3 + (ind.val - s3) / (s2 - s3);
                             }
                         }
                         resolve({ name: ind.name, id: ind.id, score: z.toFixed(2), percentile: zToPercentile(z) });
@@ -223,14 +222,14 @@
 
         Promise.all(promises).then(orderedResults => {
             resultsBody.innerHTML = ""; 
-            orderedResults.forEach(res => appendResultRow(res.name, res.id, res.score, res.percentile, totalMonths));
+            orderedResults.forEach(res => appendResultRow(res.name, res.id, res.score, res.percentile, ageDays));
         });
     }
 
-    function appendResultRow(name, id, score, percentile, totalMonths) {
+    function appendResultRow(name, id, score, percentile, ageDays) {
         const resultsBody = document.getElementById('multi-results');
         const zNum = parseFloat(score);
-        let interp = (totalMonths <= 60) ? getInterpretation05(id, score) : { text: "", note: "" };
+        let interp = (ageDays <= 1826) ? getInterpretation05(id, score) : { text: "", note: "" };
 
         let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-block; min-width: 60px; text-align: center;";
         let zC = "#0056b3", zB = "transparent", pC = "#666", pB = "transparent", lab = "";
