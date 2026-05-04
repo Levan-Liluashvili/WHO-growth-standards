@@ -223,17 +223,21 @@ return { text: "", note: "" };
                     download: true, header: true, dynamicTyping: true,
                     complete: function(results) {
                         const data = results.data.filter(row => row.L !== undefined);
-                        let lookupCol = isUnder5 ? 'Day' : 'Month';
-                        let target = isUnder5 ? ageDays : preciseMonths;
+                        // INSERT THESE UPDATED LINES:
+let targetMonth = ageDays / 30.4375; // Uses the exact WHO monthly constant
 
-                        let r1 = data[0], r2 = data[0];
-                        for (let i = 0; i < data.length - 1; i++) {
-                            if (target >= data[i][lookupCol] && target <= data[i+1][lookupCol]) {
-                                r1 = data[i]; r2 = data[i+1]; break;
-                            }
-                        }
-                        const gap = r2[lookupCol] - r1[lookupCol];
-                        const f = gap === 0 ? 0 : (target - r1[lookupCol]) / gap;
+let r1 = data[0], r2 = data[0];
+for (let i = 0; i < data.length - 1; i++) {
+    // This look-up ensures we use the decimal age to find the surrounding months
+    if (targetMonth >= data[i].Month && targetMonth <= data[i+1].Month) {
+        r1 = data[i]; 
+        r2 = data[i+1]; 
+        break;
+    }
+}
+
+const gap = r2.Month - r1.Month;
+const f = gap === 0 ? 0 : (targetMonth - r1.Month) / gap;
 
                         const L = r1.L + (r2.L - r1.L) * f;
                         const M = r1.M + (r2.M - r1.M) * f;
