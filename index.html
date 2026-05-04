@@ -99,10 +99,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
-    // 1. Set default date
-    document.getElementById('dom').valueAsDate = new Date();
-
-    async function calculate() {
+async function calculate() {
         const sex = document.getElementById('sex').value;
         const dob = new Date(document.getElementById('dob').value);
         const dom = new Date(document.getElementById('dom').value);
@@ -113,7 +110,6 @@
 
         if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
 
-        // 2. Age Logic (WHO Anthro Manual)
         const ageDaysRaw = (dom - dob) / (1000 * 60 * 60 * 24);
         const ageDays = Math.round(ageDaysRaw); 
         if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
@@ -124,7 +120,6 @@
 
         document.getElementById('ageDisplay').innerText = `Age: ${displayYears} yr ${displayMonths} mo (${totalMonths} mo)`;
 
-        // 3. clenhei Logic
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') {
             clenhei += 0.7; 
@@ -132,65 +127,70 @@
             clenhei -= 0.7; 
         }
 
-        // 4. Define Indicators with AnthroPlus constraints
         const indicatorConfig = [
             { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN },
             { id: 'hfa', name: 'Height-for-age', val: !isNaN(clenhei) ? clenhei : NaN },
-            { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && oedema !== 'y') ? weight : NaN },
+            { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && totalMonths <= 120 && oedema !== 'y') ? weight : NaN },
         ];
 
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
 
-        // 5. Create Promises
-const promises = indicatorConfig.map(ind => {
-    // AnthroPlus Rule: Absolute limit of 19 years (228 months)
-    if (totalMonths > 228) {
-        return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
-    }
+        const promises = indicatorConfig.map(ind => {
+            if (totalMonths > 228 || isNaN(ind.val)) {
+                return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
+            }
 
-    // Missing Data Check
-    if (isNaN(ind.val)) {
-        return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
-    }
-    return new Promise((resolve) => {
-        // Dynamic file selection: 0_5 vs 5_19
-        const ageSuffix = (totalMonths <= 60) ? "0_5" : "5_19";
-        const fileName = `data/${ind.id}_${sex}_${ageSuffix}.csv`;
+            return new Promise((resolve) => {
+                const ageSuffix = (totalMonths <= 60) ? "0_5" : "5_19";
+                const fileName = `data/${ind.id}_${sex}_${ageSuffix}.csv`;
 
-        Papa.parse(fileName, {
-            download: true,
-            header: true,
-            dynamicTyping: true,
-            complete: function(results) {
-                const data = results.data.filter(row => row.L !== undefined);
-                
-                // 0-5 uses 'Day' column; 5-19 uses 'Month' column
-                let lookupCol, target;
-                if (totalMonths <= 60) {
-                    lookupCol = 'Day';
-                    target = ageDays;
-                } else {
-                    lookupCol = 'Month'; 
-                    target = totalMonths;
-                }
+                Papa.parse(fileName, {
+                    download: true,
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        const data = results.data.filter(row => row.L !== undefined);
+                        let lookupCol = (totalMonths <= 60) ? 'Day' : 'Month';
+                        let target = (totalMonths <= 60) ? ageDays : totalMonths;
 
-                // Find the closest row in the CSV
-                const match = data.reduce((prev, curr) => 
-                    (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
-                );
+                        const match = data.reduce((prev, curr) => 
+                            (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
+                        );
 
-                // LMS Z-score formula
-                const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
-                const percentile = zToPercentile(zScore);
-                
-                resolve({ name: ind.name, id: ind.id, score: zScore.toFixed(2), percentile: percentile });
-            },
-            error: () => resolve({ name: ind.name, id: ind.id, score: "Error", percentile: "NA" })
+                        // --- WHO LMS & TAIL ADJUSTMENT START ---
+                        const L = match.L;
+                        const M = match.M;
+                        const S = match.S;
+                        const y = ind.val;
+
+                        // 1. Initial LMS Z-score
+                        let zScore = (Math.pow((y / M), L) - 1) / (L * S);
+
+                        // 2. Apply WHO 2007 Tail Correction (5-19y, Weight-based only)
+                        if (totalMonths > 60 && ind.id !== 'hfa') {
+                            if (zScore > 3) {
+                                const sd3pos = M * Math.pow(1 + L * S * 3, 1 / L);
+                                const sd2pos = M * Math.pow(1 + L * S * 2, 1 / L);
+                                const sd23pos = sd3pos - sd2pos;
+                                zScore = 3 + (y - sd3pos) / sd23pos;
+                            } else if (zScore < -3) {
+                                const sd3neg = M * Math.pow(1 + L * S * (-3), 1 / L);
+                                const sd2neg = M * Math.pow(1 + L * S * (-2), 1 / L);
+                                const sd23neg = sd2neg - sd3neg; 
+                                zScore = -3 + (y - sd3neg) / sd23neg;
+                            }
+                        }
+                        // --- WHO LMS & TAIL ADJUSTMENT END ---
+
+                        const percentile = zToPercentile(zScore);
+                        resolve({ name: ind.name, id: ind.id, score: zScore.toFixed(2), percentile: percentile });
+                    },
+                    error: () => resolve({ name: ind.name, id: ind.id, score: "Error", percentile: "NA" })
+                });
+            });
         });
-    });
-});
-        // 6. Final Render
+
         Promise.all(promises).then(orderedResults => {
             resultsBody.innerHTML = ""; 
             orderedResults.forEach(res => {
@@ -198,7 +198,6 @@ const promises = indicatorConfig.map(ind => {
             });
         });
     }
-
     // 7. Flagging System (0-19 years)
    function appendResultRow(name, id, score, percentile) {
     const resultsBody = document.getElementById('multi-results');
