@@ -96,6 +96,17 @@
             </tbody>
         </table>
     </div>
+    <!-- Insert Legend Here -->
+    <div style="margin-top: 20px; font-size: 0.85em; border-top: 1px solid #eee; padding-top: 15px; color: #444;">
+        <div style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+            <span style="background: #333; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 10px; min-width: 70px; text-align: center;">Extreme</span>
+            <span>A black background color alerts the user if a resulting z-score is beyond -3 or +3 SD, which is plausible but reflects extreme nutritional status.</span>
+        </div>
+        <div style="display: flex; align-items: flex-start;">
+            <span style="background: #ffcccc; color: #d9534f; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 10px; min-width: 70px; text-align: center;">🚩 Flag</span>
+            <span><strong>Red Flag:</strong> Indicates biologically implausible results. Please check for data-entry errors and, if no error is found, re-measure the child.</span>
+        </div>
+    </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
@@ -248,11 +259,10 @@ function getInterpretation(id, z, ageDays) {
         });
     }
 
-    function appendResultRow(name, id, score, percentile, ageDays) {
+   function appendResultRow(name, id, score, percentile, ageDays) {
     const resultsBody = document.getElementById('multi-results');
     const zNum = parseFloat(score);
     
-    // Define WHO Biological Plausibility Ranges (BPR)
     const limits = { 
         wfa: { l: -6, h: 5 }, 
         hfa: { l: -6, h: 6 }, 
@@ -265,18 +275,17 @@ function getInterpretation(id, z, ageDays) {
         if (zNum < l.l || zNum > l.h) isFlagged = true;
     }
 
-    // Determine Interpretation: Blank if flagged, otherwise run logic
     let interp = (isFlagged || score === 'NA') ? { text: "", note: "" } : getInterpretation(id, score, ageDays);
 
-    let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-block; min-width: 60px; text-align: center;";
-    let zC = "#0056b3", zB = "transparent", pC = "#666", pB = "transparent", lab = "";
+    let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; min-width: 80px; text-align: center;";
+    let zC = "#0056b3", zB = "transparent", pC = "#666", pB = "transparent", icon = "";
 
     if (score !== 'NA' && !isNaN(zNum)) {
         if (isFlagged) { 
-            zB = "#ffcccc"; zC = "#d9534f"; lab = " (Flagged)"; 
+            zB = "#ffcccc"; zC = "#d9534f"; icon = '<span style="margin-left: 5px;">🚩</span>'; 
         }
         else if (zNum < -3 || zNum > 3) { 
-            zB = "#333"; zC = "#fff"; pB = "#333"; pC = "#fff"; lab = " (Extreme)"; 
+            zB = "#333"; zC = "#fff"; pB = "#333"; pC = "#fff"; icon = '<span style="margin-left: 5px;">⚠️</span>'; 
         }
         else if (Math.abs(zNum) > 2) { 
             zB = "#ff0000"; zC = "#fff"; 
@@ -292,7 +301,7 @@ function getInterpretation(id, z, ageDays) {
     resultsBody.innerHTML += `
         <tr style="border-bottom: 1px solid #eee;">
             <td style="padding: 10px;">${name}</td>
-            <td><div style="${base} background-color: ${zB}; color: ${zC};">${score}${lab}</div></td>
+            <td><div style="${base} background-color: ${zB}; color: ${zC};"><span>${score}</span>${icon}</div></td>
             <td><div style="${base} background-color: ${pB}; color: ${pC};">${percentile}</div></td>
             <td style="padding: 10px; cursor: help;" title="${interp.note}">
                 <span style="${interp.note ? 'border-bottom: 1px dotted #999;' : ''}">${interp.text}</span>
