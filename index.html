@@ -137,7 +137,6 @@
             { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN },
             { id: 'hfa', name: 'Height-for-age', val: !isNaN(clenhei) ? clenhei : NaN },
             { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && oedema !== 'y') ? weight : NaN },
-            { id: 'wfh', name: 'Weight-for-height', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? weight : NaN }
         ];
 
         const resultsBody = document.getElementById('multi-results');
@@ -150,13 +149,17 @@
             if (ind.id === 'wfa' && totalMonths > 120) return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
             if (isNaN(ind.val)) return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
 
-            return new Promise((resolve) => {
-                const fileName = `data/${ind.id}_${sex}_0_5.csv`;
-                Papa.parse(fileName, {
-                    download: true,
-                    header: true,
-                    dynamicTyping: true,
-                    complete: function(results) {
+       return new Promise((resolve) => {
+    // Logic to switch between Standards (0-5) and Reference (5-19)
+    // 60 months and below = 0_5 | 61 months and above = 5_19
+    const ageSuffix = (totalMonths <= 60) ? "0_5" : "5_19";
+    const fileName = `data/${ind.id}_${sex}_${ageSuffix}.csv`;
+
+    Papa.parse(fileName, {
+        download: true,
+        header: true,
+        dynamicTyping: true,
+        complete: function(results) {
                         const data = results.data.filter(row => row.L !== undefined);
                         const lookupCol = (ind.id === 'wfh') ? 'Centimeters' : 'Day';
                         const target = (ind.id === 'wfh') ? clenhei : ageDays;
