@@ -262,7 +262,7 @@ function getInterpretation(id, z, ageDays) {
         });
     }
 
-   function appendResultRow(name, id, score, percentile, ageDays) {
+  function appendResultRow(name, id, score, percentile, ageDays) {
     const resultsBody = document.getElementById('multi-results');
     const zNum = parseFloat(score);
     
@@ -285,19 +285,26 @@ function getInterpretation(id, z, ageDays) {
 
     if (score !== 'NA' && !isNaN(zNum)) {
         if (isFlagged) { 
-            zB = "#ffcccc"; zC = "#d9534f"; icon = '<span style="margin-left: 5px;">🚩</span>'; 
+            zB = "#ffcccc"; zC = "#d9534f"; 
+            pB = "#ffcccc"; pC = "#d9534f"; // Sync Flag color
+            icon = '<span style="margin-left: 5px;">🚩</span>'; 
         }
         else if (zNum < -3 || zNum > 3) { 
-            zB = "#333"; zC = "#fff"; pB = "#333"; pC = "#fff"; icon = '<span style="margin-left: 5px;">⚠️</span>'; 
+            zB = "#333"; zC = "#fff"; 
+            pB = "#333"; pC = "#fff"; // Sync Extreme color
+            icon = '<span style="margin-left: 5px;">⚠️</span>'; 
         }
         else if (Math.abs(zNum) > 2) { 
             zB = "#ff0000"; zC = "#fff"; 
+            pB = "#ff0000"; pC = "#fff"; // Sync Obese/Stunted color
         }
         else if (Math.abs(zNum) > 1) { 
             zB = "#FFD700"; zC = "#000"; 
+            pB = "#FFD700"; pC = "#000"; // Sync Overweight color
         }
         else { 
             zB = "#90EE90"; zC = "#000"; 
+            pB = "#90EE90"; pC = "#000"; // Sync Normal color
         }
     }
 
