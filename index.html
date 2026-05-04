@@ -13,16 +13,15 @@
         input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
         button { background: #007bff; color: white; border: none; padding: 14px; width: 100%; margin-top: 20px; cursor: pointer; border-radius: 6px; font-size: 1em; font-weight: bold; }
         button:hover { background: #0056b3; }
-        #result { margin-top: 25px; padding: 20px; border-radius: 8px; background: #e9ecef; font-size: 1.1em; line-height: 1.6; border-left: 6px solid #007bff; }
-        .missing { color: #dc3545; font-weight: bold; }
+        #result { margin-top: 25px; padding: 20px; border-radius: 8px; background: #f8f9fa; border-left: 6px solid #007bff; }
+        .info-bar { margin-top: 15px; display: flex; justify-content: space-between; font-weight: bold; color: #0056b3; min-height: 1.2em; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2> WHO Growth Standards Calculator</h2>
-    <p><small>Implementing WHO Anthro R Logic</small></p>
-
+    <h2>Growth Standards Calculator</h2>
+    
     <div class="row">
         <div>
             <label>Sex</label>
@@ -71,39 +70,38 @@
             <input type="number" id="height" step="0.1" placeholder="e.g. 85.5">
         </div>
         <div style="visibility: hidden;">
-            <!-- This empty div maintains the grid alignment for the height field -->
-            <label>Spacer</label>
-            <input type="text">
+            <label>Spacer</label><input type="text">
         </div>
     </div>
 
-<!-- BMI and Age appear on the same line -->
-<div style="margin-top: 15px; text-align: left; font-weight: bold; color: #0056b3; min-height: 1.2em;">
-    <span id="bmiDisplay"></span>
-    <span id="ageDisplay" style="margin-left: 20px; color: #555; font-size: 0.9em;"></span>
-</div>
-    <!-- Button takes full width -->
+    <div class="info-bar">
+        <span id="bmiDisplay"></span>
+        <span id="ageDisplay" style="color: #555; font-size: 0.9em;"></span>
+    </div>
+
     <button onclick="calculate()">Calculate Z-Score</button>
 
-<div id="result" style="margin-top: 25px; padding: 20px; border-radius: 8px; background: #f8f9fa; border-left: 6px solid #007bff;">
-    <table style="width: 100%; border-collapse: collapse;">
-<thead>
-    <tr style="border-bottom: 2px solid #dee2e6; text-align: left;">
-        <th style="padding: 8px;">Indicator</th>
-        <th style="padding: 8px;">Z-Score</th>
-        <th style="padding: 8px;">Percentile</th>
-    </tr>
-</thead>
-        <tbody id="multi-results">
-            <tr><td colspan="2" style="padding: 10px; color: #666;">Waiting for input...</td></tr>
-        </tbody>
-    </table>
-</div>
+    <div id="result">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #dee2e6; text-align: left;">
+                    <th style="padding: 8px;">Indicator</th>
+                    <th style="padding: 8px;">Z-Score</th>
+                    <th style="padding: 8px;">Percentile</th>
+                </tr>
+            </thead>
+            <tbody id="multi-results">
+                <tr><td colspan="3" style="padding: 10px; color: #666;">Waiting for input...</td></tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
-</script>
-async function calculate() {
+<script>
+    document.getElementById('dom').valueAsDate = new Date();
+
+    async function calculate() {
         const sex = document.getElementById('sex').value;
         const dob = new Date(document.getElementById('dob').value);
         const dom = new Date(document.getElementById('dom').value);
@@ -114,22 +112,19 @@ async function calculate() {
 
         if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
 
-        // 1. Calculate Age in Days
+        // 1. Age Calculation (WHO Anthro Manual Logic)
         const ageDaysRaw = (dom - dob) / (1000 * 60 * 60 * 24);
-        const ageDays = Math.round(ageDaysRaw); 
+        const ageDays = Math.round(ageDaysRaw); // Rounding to nearest whole day
         if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
 
-        // 2. WHO Anthro Logic: Age in completed months
-        // Using the 30.4375 principle from the manual
+        // Age in completed months (using 30.4375 principle)
         const totalMonths = Math.floor(ageDays / 30.4375);
         const displayYears = Math.floor(totalMonths / 12);
         const displayMonths = totalMonths % 12;
 
-        // Update the Age Display: e.g., "5 yr 3 mo (63 mo)"
-        document.getElementById('ageDisplay').innerText = 
-            `Age: ${displayYears} yr ${displayMonths} mo (${totalMonths} mo)`;
+        document.getElementById('ageDisplay').innerText = `Age: ${displayYears} yr ${displayMonths} mo (${totalMonths} mo)`;
 
-        // 3. clenhei Logic
+        // 2. clenhei Logic (731 days = 24 months rounding)
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') {
             clenhei += 0.7; 
@@ -150,17 +145,10 @@ async function calculate() {
         const promises = indicatorConfig.map(ind => {
             const isWeightRelated = (ind.id !== 'hfa');
 
-            // Apply Age Rules: All NA > 228 mo, WFA NA > 120 mo
-            if (totalMonths > 228) {
-                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
-            }
-            if (ind.id === 'wfa' && totalMonths > 120) {
-                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
-            }
-
-            if (isNaN(ind.val) || (oedema === 'y' && isWeightRelated)) {
-                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
-            }
+            // AnthroPlus Manual Rules
+            if (totalMonths > 228) return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
+            if (ind.id === 'wfa' && totalMonths > 120) return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
+            if (isNaN(ind.val) || (oedema === 'y' && isWeightRelated)) return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
 
             return new Promise((resolve) => {
                 const fileName = `data/${ind.id}_${sex}_0_5.csv`;
@@ -182,9 +170,7 @@ async function calculate() {
                         
                         resolve({ name: ind.name, score: zScore.toFixed(2), percentile: percentile });
                     },
-                    error: function() {
-                        resolve({ name: ind.name, score: "Error", percentile: "NA" });
-                    }
+                    error: () => resolve({ name: ind.name, score: "Error", percentile: "NA" })
                 });
             });
         });
@@ -196,6 +182,7 @@ async function calculate() {
             });
         });
     }
+
     function appendResultRow(name, score, percentile) {
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML += `
@@ -212,7 +199,7 @@ async function calculate() {
         const display = document.getElementById('bmiDisplay');
         if (!isNaN(weight) && !isNaN(height) && height > 0) {
             const bmi = weight / Math.pow(height / 100, 2);
-            display.innerText = `BMI ${bmi.toFixed(2)}`;
+            display.innerText = `BMI: ${bmi.toFixed(2)}`;
         } else {
             display.innerText = "";
         }
@@ -221,24 +208,17 @@ async function calculate() {
     document.getElementById('weight').addEventListener('input', updateBMI);
     document.getElementById('height').addEventListener('input', updateBMI);
 
-    // Percentile Function strictly following AnthroPlus manual (+/- 3 SD)
     function zToPercentile(z) {
         if (z === "NA" || isNaN(z)) return "NA";
-        
         const zNum = parseFloat(z);
-
-        // AnthroPlus Manual Rule: Percentiles read "NA" for all z-score values <-3 SD and >+3 SD
+        // AnthroPlus Manual: Percentiles read NA beyond +/- 3 SD
         if (zNum < -3 || zNum > 3) return "NA";
 
-        // Standard Normal CDF approximation
         const t = 1 / (1 + 0.2316419 * Math.abs(zNum));
         const d = 0.3989423 * Math.exp(-zNum * zNum / 2);
         let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
-        
         if (zNum > 0) p = 1 - p;
-        
-        let pct = p * 100;
-        return pct.toFixed(1) + "th";
+        return (p * 100).toFixed(1) + "th";
     }
 </script>
 </body>
