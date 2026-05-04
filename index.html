@@ -219,26 +219,22 @@
     document.getElementById('weight').addEventListener('input', updateBMI);
     document.getElementById('height').addEventListener('input', updateBMI);
 
-function zToPercentile(z, id) {
+function zToPercentile(z) {
     if (z === "NA" || isNaN(z)) return "NA";
     
-    // 1. AnthroPlus Exclusion Logic: If it's this rare, show NA, not the percentile
-    if (id === 'hfa' && (z > 6 || z < -6)) return "NA";
-    if (id === 'wfa' && (z > 5 || z < -6)) return "NA";
-    if (id === 'wfh' && (z > 5 || z < -5)) return "NA";
-    if (id === 'bmi' && (z > 5 || z < -5)) return "NA";
+    // AnthroPlus Rule: Percentiles read "NA" for all z-score values <-3 SD and >+3 SD
+    const zNum = parseFloat(z);
+    if (zNum < -3 || zNum > 3) return "NA";
 
-    // 2. Standard Math for valid ranges
-    const t = 1 / (1 + 0.2316419 * Math.abs(z));
-    const d = 0.3989423 * Math.exp(-z * z / 2);
+    // Standard Math for valid clinical ranges (-3 to +3)
+    const t = 1 / (1 + 0.2316419 * Math.abs(zNum));
+    const d = 0.3989423 * Math.exp(-zNum * zNum / 2);
     let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
-    if (z > 0) p = 1 - p;
+    if (zNum > 0) p = 1 - p;
     
     let pct = p * 100;
-
-    // 3. Clinical Rounding: AnthroPlus typically rounds to 1 decimal
-    // If it's very close to the edge but not flagged, show the decimal.
     return pct.toFixed(1) + "th";
+}
     }
 </script>
 </body>
