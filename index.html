@@ -143,42 +143,53 @@
         resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
 
         // 5. Create Promises
-        const promises = indicatorConfig.map(ind => {
-            // Check Age Rules first
-            if (totalMonths > 228) return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
-            if (ind.id === 'wfa' && totalMonths > 120) return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
-            if (isNaN(ind.val)) return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
+const promises = indicatorConfig.map(ind => {
+    // AnthroPlus Rule: Absolute limit of 19 years (228 months)
+    if (totalMonths > 228) {
+        return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
+    }
 
-       return new Promise((resolve) => {
-    // Logic to switch between Standards (0-5) and Reference (5-19)
-    // 60 months and below = 0_5 | 61 months and above = 5_19
-    const ageSuffix = (totalMonths <= 60) ? "0_5" : "5_19";
-    const fileName = `data/${ind.id}_${sex}_${ageSuffix}.csv`;
+    // Missing Data Check
+    if (isNaN(ind.val)) {
+        return Promise.resolve({ name: ind.name, id: ind.id, score: "NA", percentile: "NA" });
+    }
+    return new Promise((resolve) => {
+        // Dynamic file selection: 0_5 vs 5_19
+        const ageSuffix = (totalMonths <= 60) ? "0_5" : "5_19";
+        const fileName = `data/${ind.id}_${sex}_${ageSuffix}.csv`;
 
-    Papa.parse(fileName, {
-        download: true,
-        header: true,
-        dynamicTyping: true,
-        complete: function(results) {
-                        const data = results.data.filter(row => row.L !== undefined);
-                        const lookupCol = (ind.id === 'wfh') ? 'Centimeters' : 'Day';
-                        const target = (ind.id === 'wfh') ? clenhei : ageDays;
+        Papa.parse(fileName, {
+            download: true,
+            header: true,
+            dynamicTyping: true,
+            complete: function(results) {
+                const data = results.data.filter(row => row.L !== undefined);
+                
+                // 0-5 uses 'Day' column; 5-19 uses 'Month' column
+                let lookupCol, target;
+                if (totalMonths <= 60) {
+                    lookupCol = 'Day';
+                    target = ageDays;
+                } else {
+                    lookupCol = 'Month'; 
+                    target = totalMonths;
+                }
 
-                        const match = data.reduce((prev, curr) => 
-                            (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
-                        );
+                // Find the closest row in the CSV
+                const match = data.reduce((prev, curr) => 
+                    (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
+                );
 
-                        const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
-                        const percentile = zToPercentile(zScore);
-                        
-                        // IMPORTANT: Include the ID in the resolve
-                        resolve({ name: ind.name, id: ind.id, score: zScore.toFixed(2), percentile: percentile });
-                    },
-                    error: () => resolve({ name: ind.name, id: ind.id, score: "Error", percentile: "NA" })
-                });
-            });
+                // LMS Z-score formula
+                const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
+                const percentile = zToPercentile(zScore);
+                
+                resolve({ name: ind.name, id: ind.id, score: zScore.toFixed(2), percentile: percentile });
+            },
+            error: () => resolve({ name: ind.name, id: ind.id, score: "Error", percentile: "NA" })
         });
-
+    });
+});
         // 6. Final Render
         Promise.all(promises).then(orderedResults => {
             resultsBody.innerHTML = ""; 
