@@ -77,9 +77,11 @@
         </div>
     </div>
 
-    <!-- BMI appears on its own line centered -->
-    <div id="bmiDisplay" style="margin-top: 15px; text-align: left; font-weight: bold; color: #0056b3; min-height: 1.2em;"></div>
-
+<!-- BMI and Age appear on the same line -->
+<div style="margin-top: 15px; text-align: left; font-weight: bold; color: #0056b3; min-height: 1.2em;">
+    <span id="bmiDisplay"></span>
+    <span id="ageDisplay" style="margin-left: 20px; color: #555; font-size: 0.9em;"></span>
+</div>
     <!-- Button takes full width -->
     <button onclick="calculate()">Calculate Z-Score</button>
 
@@ -100,12 +102,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
-<script>
-    // 1. Set default measurement date immediately on load
-    document.getElementById('dom').valueAsDate = new Date();
-
+</script>
     async function calculate() {
-        // Get Input Values
         const sex = document.getElementById('sex').value;
         const dob = new Date(document.getElementById('dob').value);
         const dom = new Date(document.getElementById('dom').value);
@@ -114,22 +112,24 @@
         const measure = document.getElementById('measure').value;
         const oedema = document.getElementById('oedema').value;
 
-        // Basic Validation
-        if (isNaN(dob) || isNaN(dom)) { 
-            alert("Please enter valid dates."); 
-            return; 
-        }
+        if (isNaN(dob) || isNaN(dom)) { alert("Please enter valid dates."); return; }
 
-        const ageDays = Math.floor((dom - dob) / (1000 * 60 * 60 * 24));
-        if (ageDays < 0) { 
-            alert("Measurement date must be after birth date."); 
-            return; 
-        }
+        // 1. Calculate Age in Days
+        const ageDaysRaw = (dom - dob) / (1000 * 60 * 60 * 24);
+        const ageDays = Math.round(ageDaysRaw); 
+        if (ageDays < 0) { alert("Measurement date must be after birth date."); return; }
 
-        // AnthroPlus Rule: Calculate age in months (average month length)
-        const ageMonths = ageDays / 30.4375;
+        // 2. WHO Anthro Logic: Age in completed months
+        // Using the 30.4375 principle from the manual
+        const totalMonths = Math.floor(ageDays / 30.4375);
+        const displayYears = Math.floor(totalMonths / 12);
+        const displayMonths = totalMonths % 12;
 
-        // 2. clenhei Logic (WHO Anthro Standard)
+        // Update the Age Display: e.g., "5 yr 3 mo (63 mo)"
+        document.getElementById('ageDisplay').innerText = 
+            `Age: ${displayYears} yr ${displayMonths} mo (${totalMonths} mo)`;
+
+        // 3. clenhei Logic
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') {
             clenhei += 0.7; 
@@ -137,7 +137,6 @@
             clenhei -= 0.7; 
         }
 
-        // 3. Define Indicators with Fixed Order
         const indicatorConfig = [
             { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei)) ? (weight / Math.pow(clenhei / 100, 2)) : NaN },
             { id: 'hfa', name: 'Height-for-age', val: clenhei },
@@ -148,21 +147,17 @@
         const resultsBody = document.getElementById('multi-results');
         resultsBody.innerHTML = "<tr><td colspan='3' style='padding: 10px;'>Calculating...</td></tr>"; 
 
-        // 4. Create Promises for calculation
         const promises = indicatorConfig.map(ind => {
             const isWeightRelated = (ind.id !== 'hfa');
 
-            // AnthroPlus Manual Rule: Above 228 months, all indicators are NA
-            if (ageMonths > 228) {
+            // Apply Age Rules: All NA > 228 mo, WFA NA > 120 mo
+            if (totalMonths > 228) {
+                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
+            }
+            if (ind.id === 'wfa' && totalMonths > 120) {
                 return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
             }
 
-            // AnthroPlus Manual Rule: Weight-for-age is NA if age > 120 months
-            if (ind.id === 'wfa' && ageMonths > 120) {
-                return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
-            }
-
-            // Standard Missing Data or Oedema Logic
             if (isNaN(ind.val) || (oedema === 'y' && isWeightRelated)) {
                 return Promise.resolve({ name: ind.name, score: "NA", percentile: "NA" });
             }
@@ -182,10 +177,7 @@
                             (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
                         );
 
-                        // LMS Formula
                         const zScore = (Math.pow((ind.val / match.M), match.L) - 1) / (match.L * match.S);
-                        
-                        // Apply AnthroPlus Percentile Rule (+/- 3 SD)
                         const percentile = zToPercentile(zScore);
                         
                         resolve({ name: ind.name, score: zScore.toFixed(2), percentile: percentile });
@@ -197,7 +189,6 @@
             });
         });
 
-        // 5. Render results
         Promise.all(promises).then(orderedResults => {
             resultsBody.innerHTML = ""; 
             orderedResults.forEach(res => {
