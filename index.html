@@ -197,7 +197,7 @@ function getInterpretation(id, z, ageDays) {
         const indicatorConfig = [
             { id: 'hfa', name: 'Height-for-age', val: !isNaN(clenhei) ? clenhei : NaN },
             { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && ageDays <= 3652 && oedema !== 'y') ? weight : NaN },
-            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 2)) : NaN }
+            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 1)) : NaN }
         ];
 
         const resultsBody = document.getElementById('multi-results');
