@@ -165,44 +165,53 @@
                     download: true,
                     header: true,
                     dynamicTyping: true,
-                    complete: function(results) {
-                        const data = results.data.filter(row => row.L !== undefined);
-                        
-                        // Age-based lookup: Days for 0-5, Months for 5-19
-                        let lookupCol = (totalMonths <= 60) ? 'Day' : 'Month';
-                        let target = (totalMonths <= 60) ? ageDays : totalMonths;
+complete: function(results) {
+    const data = results.data.filter(row => row.L !== undefined);
+    
+    let lookupCol = (totalMonths <= 60) ? 'Day' : 'Month';
+    let target = (totalMonths <= 60) ? ageDays : (ageDays / 30.4375); // Use precise decimal months
 
-                        const match = data.reduce((prev, curr) => 
-                            (Math.abs(curr[lookupCol] - target) < Math.abs(prev[lookupCol] - target) ? curr : prev)
-                        );
+    // 1. Find the two surrounding rows for interpolation
+    let row1 = data[0];
+    let row2 = data[0];
 
-                        // --- WHO LMS & TAIL ADJUSTMENT ---
-                        const L = match.L;
-                        const M = match.M;
-                        const S = match.S;
-                        const y = ind.val;
+    for (let i = 0; i < data.length - 1; i++) {
+        if (target >= data[i][lookupCol] && target <= data[i+1][lookupCol]) {
+            row1 = data[i];
+            row2 = data[i+1];
+            break;
+        }
+    }
 
-                        // Initial LMS Z-score
-                        let zScore = (Math.pow((y / M), L) - 1) / (L * S);
+    // 2. Calculate the interpolation factor (fractional distance between rows)
+    const diff = row2[lookupCol] - row1[lookupCol];
+    const factor = diff === 0 ? 0 : (target - row1[lookupCol]) / diff;
 
-                        // WHO 2007 Tail Correction for Weight/BMI (5-19y)
-                        if (totalMonths > 60 && ind.id !== 'hfa') {
-                            if (zScore > 3) {
-                                const sd3pos = M * Math.pow(1 + L * S * 3, 1 / L);
-                                const sd2pos = M * Math.pow(1 + L * S * 2, 1 / L);
-                                const sd23pos = sd3pos - sd2pos;
-                                zScore = 3 + (y - sd3pos) / sd23pos;
-                            } else if (zScore < -3) {
-                                const sd3neg = M * Math.pow(1 + L * S * (-3), 1 / L);
-                                const sd2neg = M * Math.pow(1 + L * S * (-2), 1 / L);
-                                const sd23neg = sd2neg - sd3neg; 
-                                zScore = -3 + (y - sd3neg) / sd23neg;
-                            }
-                        }
+    // 3. Interpolate L, M, and S parameters
+    const L = row1.L + (row2.L - row1.L) * factor;
+    const M = row1.M + (row2.M - row1.M) * factor;
+    const S = row1.S + (row2.S - row1.S) * factor;
+    const y = ind.val;
 
-                        const percentile = zToPercentile(zScore);
-                        resolve({ name: ind.name, id: ind.id, score: zScore.toFixed(2), percentile: percentile });
-                    },
+    // 4. Standard LMS Z-score
+    let zScore = (Math.pow((y / M), L) - 1) / (L * S);
+
+    // 5. Apply WHO 2007 Tail Correction (5-19y, Weight/BMI only)
+    if (totalMonths > 60 && ind.id !== 'hfa') {
+        if (zScore > 3) {
+            const sd3pos = M * Math.pow(1 + L * S * 3, 1 / L);
+            const sd2pos = M * Math.pow(1 + L * S * 2, 1 / L);
+            zScore = 3 + (y - sd3pos) / (sd3pos - sd2pos);
+        } else if (zScore < -3) {
+            const sd3neg = M * Math.pow(1 + L * S * (-3), 1 / L);
+            const sd2neg = M * Math.pow(1 + L * S * (-2), 1 / L);
+            zScore = -3 + (y - sd3neg) / (sd2neg - sd3neg);
+        }
+    }
+
+    const percentile = zToPercentile(zScore);
+    resolve({ name: ind.name, id: ind.id, score: zScore.toFixed(2), percentile: percentile });
+},
                     error: () => resolve({ name: ind.name, id: ind.id, score: "Error", percentile: "NA" })
                 });
             });
