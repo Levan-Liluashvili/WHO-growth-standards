@@ -152,24 +152,28 @@ function getInterpretation(id, z, ageDays) {
             if (zNum < -2) return { text: "Wasted", note: "" };
         }
     } 
-    // 5 to 19 Years (1827 - 6939 Days)
-    else {
-        if (id === 'hfa') {
-            if (zNum < -3) return { text: "Severely stunted", note: "" };
-            if (zNum < -2) return { text: "Stunted", note: "" };
-        }
-        if (id === 'wfa' && ageDays <= 3652) { // Only up to 10 years
-            if (zNum < -3) return { text: "Severely underweight", note: "" };
-            if (zNum < -2) return { text: "Underweight", note: "" };
-        }
-        if (id === 'bmi') {
-            if (zNum > 2) return { text: "Obese", note: "" };
-            if (zNum > 1) return { text: "Overweight", note: "" };
-            if (zNum < -3) return { text: "Severely thin", note: "" };
-            if (zNum < -2) return { text: "Thin", note: "" };
-        }
+// 5 to 19 Years (1827 - 6939 Days)
+else {
+    if (id === 'hfa') {
+        if (zNum > 3) return { text: "Very Tall", note: "" };
+        if (zNum < -3) return { text: "Severely stunted", note: "" };
+        if (zNum < -2) return { text: "Stunted", note: "" };
     }
-    return { text: "", note: "" };
+    if (id === 'wfa' && ageDays <= 3652) { 
+        if (zNum > 3) return { text: "High Weight", note: "" };
+        if (zNum < -3) return { text: "Severely underweight", note: "" };
+        if (zNum < -2) return { text: "Underweight", note: "" };
+    }
+    if (id === 'bmi') {
+        if (zNum > 3) return { text: "Obese (Extreme)", note: "" }; 
+        if (zNum > 2) return { text: "Obese", note: "" };
+        if (zNum > 1) return { text: "Overweight", note: "" };
+        if (zNum < -3) return { text: "Severely thin", note: "" };
+        if (zNum < -2) return { text: "Thin", note: "" };
+    }
+}
+// Returns blank for anything not listed above (Normal range)
+return { text: "", note: "" };
 }
 
     async function calculate() {
@@ -200,7 +204,7 @@ function getInterpretation(id, z, ageDays) {
         const indicatorConfig = [
             { id: 'hfa', name: 'Height-for-age', val: !isNaN(clenhei) ? clenhei : NaN },
             { id: 'wfa', name: 'Weight-for-age', val: (!isNaN(weight) && ageDays <= 3652 && oedema !== 'y') ? weight : NaN },
-            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? (weight / Math.pow(clenhei / 100, 1)) : NaN }
+            { id: 'bmi', name: 'BMI-for-age', val: (!isNaN(weight) && !isNaN(clenhei) && oedema !== 'y') ? parseFloat((weight / Math.pow(clenhei / 100, 2)).toFixed(1)) : NaN }
         ];
 
         const resultsBody = document.getElementById('multi-results');
