@@ -177,7 +177,7 @@ function getInterpretation(id, z, ageDays) {
         const totalMonths = Math.floor(ageDays / 30.4375);
         const preciseMonths = ageDays / 30.4375;
         
-        document.getElementById('ageDisplay').innerText = `Age: ${Math.floor(totalMonths/12)} yr ${totalMonths%12} mo (${totalMonths} mo)`;
+        document.getElementById('ageDisplay').innerText = `Age: ${Math.floor(totalMonths/12)}yr ${totalMonths%12}mo (${totalMonths}mo)`;
 
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') clenhei += 0.7; 
