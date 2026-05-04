@@ -104,10 +104,10 @@
         </div>
         <div style="display: flex; align-items: flex-start;">
             <span style="background: #ffcccc; color: #d9534f; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 10px; min-width: 70px; text-align: center;">🚩 Flag</span>
-            <span><strong>Red Flag:</strong> Indicates biologically implausible results. Please check for data-entry errors and, if no error is found, re-measure the child.</span>
+            <span>Red Flag indicates biologically implausible results. Please check for data-entry errors and, if no error is found, re-measure the child.</span>
         </div>
 <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #ccc; font-style: italic; color: #555; line-height: 1.4;">
-    <strong>Clinical Note:</strong> When evaluating young children (0-5 years), clinicians may prefer to avoid strict classification and focus instead on the individual growth trajectory and a comprehensive clinical assessment.
+    <strong>Note for Clinicians:</strong> When evaluating young children, clinicians might even prefer to avoid classifying a child at this age (0-5 years), and focus instead on the individual growth trajectory and the clinical assessment.
 </div>
     </div>
 </div>
@@ -327,7 +327,7 @@ function getInterpretation(id, z, ageDays) {
         const h = parseFloat(document.getElementById('height').value);
         const o = document.getElementById('oedema').value;
         const d = document.getElementById('bmiDisplay');
-        if (!isNaN(w) && !isNaN(h) && h > 0 && o !== 'y') d.innerText = `BMI: ${(w / Math.pow(h / 100, 2)).toFixed(2)}`;
+        if (!isNaN(w) && !isNaN(h) && h > 0 && o !== 'y') d.innerText = `BMI: ${(w / Math.pow(h / 100, 2)).toFixed(1)}`;
         else d.innerText = "";
     }
     document.getElementById('weight').addEventListener('input', updateBMI);
