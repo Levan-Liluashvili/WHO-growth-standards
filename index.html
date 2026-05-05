@@ -340,13 +340,13 @@ function appendResultRow(name, id, score, percentile, ageDays) {
 resultsBody.innerHTML += `
     <tr style="border-bottom: 1px solid #eee;">
         <td style="padding: 10px;">${name}</td>
-        
         <td><div style="${base} background-color: ${zB}; color: ${zC};"><span>${score}</span>${icon}</div></td>
-        
         <td><div style="${base} background-color: ${zB}; color: ${zC};">${percentile}</div></td>
         
-        <td style="padding: 10px; font-size: 0.85em;">
-            ${displayStatus}
+        <td style="padding: 10px; font-size: 0.85em; cursor: help;" title="${interp.note}">
+            <span style="${interp.note ? 'border-bottom: 1px dotted #999;' : ''}">
+                ${displayStatus}
+            </span>
         </td>
     </tr>`;
 }
