@@ -261,28 +261,56 @@ function getInterpretation(id, z, ageDays) {
         });
     }
 
-    function appendResultRow(name, id, score, percentile, ageDays) {
-        const resultsBody = document.getElementById('multi-results');
-        const zNum = parseFloat(score);
-        let interp = getInterpretation(id, score, ageDays);
+function appendResultRow(name, id, score, percentile, ageDays) {
+    const resultsBody = document.getElementById('multi-results');
+    const zNum = parseFloat(score);
+    
+    const limits = { 
+        wfa: { l: -6, h: 5 }, 
+        hfa: { l: -6, h: 6 }, 
+        bmi: { l: -5, h: 5 } 
+    };
 
-        let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-block; min-width: 60px; text-align: center;";
-        let zC = "#0056b3", zB = "transparent", pC = "#666", pB = "transparent", lab = "";
+    let isFlagged = false;
+    if (score !== 'NA' && !isNaN(zNum)) {
+        const l = limits[id];
+        if (zNum < l.l || zNum > l.h) isFlagged = true;
+    }
 
-        if (score !== 'NA' && !isNaN(zNum)) {
-            const lim = { wfa: {l: -6, h: 5}, hfa: {l: -6, h: 6}, bmi: {l: -5, h: 5} };
-            const l = lim[id];
-            if (zNum < l.l || zNum > l.h) { zB = "#ffcccc"; zC = "#d9534f"; lab = " (Flagged)"; }
-            else if (zNum < -3 || zNum > 3) { zB = "#333"; zC = "#fff"; pB = "#333"; pC = "#fff"; lab = " (Extreme)"; }
-            else if (Math.abs(zNum) > 2) { zB = "#ff0000"; zC = "#fff"; }
-            else if (Math.abs(zNum) > 1) { zB = "#FFD700"; zC = "#000"; }
-            else { zB = "#90EE90"; zC = "#000"; }
+    let interp = (isFlagged || score === 'NA') ? { text: "", note: "" } : getInterpretation(id, score, ageDays);
+
+    let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; min-width: 80px; text-align: center;";
+    let zC = "#0056b3", zB = "transparent", pC = "#666", pB = "transparent", icon = "";
+
+    if (score !== 'NA' && !isNaN(zNum)) {
+        if (isFlagged) { 
+            zB = "#ffcccc"; zC = "#d9534f"; 
+            pB = "#ffcccc"; pC = "#d9534f"; // Sync Flag color
+            icon = '<span style="margin-left: 5px;">🚩</span>'; 
         }
+        else if (zNum < -3 || zNum > 3) { 
+            zB = "#333"; zC = "#fff"; 
+            pB = "#333"; pC = "#fff"; // Sync Extreme color
+            icon = '<span style="margin-left: 5px;">⚠️</span>'; 
+        }
+        else if (Math.abs(zNum) > 2) { 
+            zB = "#ff0000"; zC = "#fff"; 
+            pB = "#ff0000"; pC = "#fff"; // Sync Obese/Stunted color
+        }
+        else if (Math.abs(zNum) > 1) { 
+            zB = "#FFD700"; zC = "#000"; 
+            pB = "#FFD700"; pC = "#000"; // Sync Overweight color
+        }
+        else { 
+            zB = "#90EE90"; zC = "#000"; 
+            pB = "#90EE90"; pC = "#000"; // Sync Normal color
+        }
+    }
 
-resultsBody.innerHTML += `
+    resultsBody.innerHTML += `
         <tr style="border-bottom: 1px solid #eee;">
             <td style="padding: 10px;">${name}</td>
-            <td><div style="${base} background-color: ${zB}; color: ${zC};">${score}${lab}</div></td>
+            <td><div style="${base} background-color: ${zB}; color: ${zC};"><span>${score}</span>${icon}</div></td>
             <td><div style="${base} background-color: ${pB}; color: ${pC};">${percentile}</div></td>
             <td style="padding: 10px; cursor: help;" title="${interp.note}">
                 <span style="${interp.note ? 'border-bottom: 1px dotted #999;' : ''}">${interp.text}</span>
