@@ -255,69 +255,65 @@ function getInterpretation(id, z, ageDays) {
             });
         });
 
-        Promise.all(promises).then(orderedResults => {
-            resultsBody.innerHTML = ""; 
-            orderedResults.forEach(res => appendResultRow(res.name, res.id, res.score, res.percentile, ageDays));
-        });
-    }
+Promise.all(promises).then(orderedResults => {
+    resultsBody.innerHTML = ""; 
+    
+    // Identify individual flags to check for the "HAZ & WAZ" joint flag
+    const hfaRes = orderedResults.find(r => r.id === 'hfa');
+    const wfaRes = orderedResults.find(r => r.id === 'wfa');
 
-function appendResultRow(name, id, score, percentile, ageDays) {
+    const hfaFlagged = hfaRes && (parseFloat(hfaRes.score) < -6 || parseFloat(hfaRes.score) > 6);
+    const wfaFlagged = wfaRes && (parseFloat(wfaRes.score) < -6 || parseFloat(wfaRes.score) > 5);
+
+    orderedResults.forEach(res => {
+        let jointFlag = false;
+        // If both are flagged, we mark them with the "Age Error" tracking
+        if (hfaFlagged && wfaFlagged && (res.id === 'hfa' || res.id === 'wfa')) {
+            jointFlag = true;
+        }
+        appendResultRow(res.name, res.id, res.score, res.percentile, ageDays, jointFlag);
+    });
+});
+    }
+function appendResultRow(name, id, score, percentile, ageDays, jointFlag) {
     const resultsBody = document.getElementById('multi-results');
     const zNum = parseFloat(score);
     
-    const limits = { 
-        wfa: { l: -6, h: 5 }, 
-        hfa: { l: -6, h: 6 }, 
-        bmi: { l: -5, h: 5 } 
-    };
+    const flagLimits = { wfa: { l: -6, u: 5 }, hfa: { l: -6, u: 6 }, bmi: { l: -5, u: 5 } };
 
     let isFlagged = false;
     if (score !== 'NA' && !isNaN(zNum)) {
-        const l = limits[id];
-        if (zNum < l.l || zNum > l.h) isFlagged = true;
+        const lim = flagLimits[id];
+        if (zNum < lim.l || zNum > lim.u) isFlagged = true;
     }
 
-    let interp = (isFlagged || score === 'NA') ? { text: "", note: "" } : getInterpretation(id, score, ageDays);
-
-    let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; min-width: 80px; text-align: center;";
-    let zC = "#0056b3", zB = "transparent", pC = "#666", pB = "transparent", icon = "";
-
-    if (score !== 'NA' && !isNaN(zNum)) {
-        if (isFlagged) { 
-            zB = "#ffcccc"; zC = "#d9534f"; 
-            pB = "#ffcccc"; pC = "#d9534f"; // Sync Flag color
-            icon = '<span style="margin-left: 5px;">🚩</span>'; 
-        }
-        else if (zNum < -3 || zNum > 3) { 
-            zB = "#333"; zC = "#fff"; 
-            pB = "#333"; pC = "#fff"; // Sync Extreme color
-            icon = '<span style="margin-left: 5px;">⚠️</span>'; 
-        }
-        else if (Math.abs(zNum) > 2) { 
-            zB = "#ff0000"; zC = "#fff"; 
-            pB = "#ff0000"; pC = "#fff"; // Sync Obese/Stunted color
-        }
-        else if (Math.abs(zNum) > 1) { 
-            zB = "#FFD700"; zC = "#000"; 
-            pB = "#FFD700"; pC = "#000"; // Sync Overweight color
-        }
-        else { 
-            zB = "#90EE90"; zC = "#000"; 
-            pB = "#90EE90"; pC = "#000"; // Sync Normal color
-        }
+    // Official Flag Error Tracking (The 4 Codes)
+    let errorText = "";
+    if (jointFlag) {
+        errorText = "HAZ & WAZ Flag: Age information may be incorrect, out of range or missing.";
+    } else if (isFlagged) {
+        if (id === 'hfa') errorText = "HAZ Flag: Check height data or age. If WAZ is also extreme, check age.";
+        if (id === 'wfa') errorText = "WAZ Flag: Either weight or age may be incorrect or missing.";
+        if (id === 'bmi') errorText = "BAZ Flag: This may indicate an unusual combination of WAZ and HAZ.";
     }
+
+    // Styling (simplified for brevity)
+    let zBg = isFlagged ? "#ffcccc" : (Math.abs(zNum) > 3 ? "#333" : "#90EE90");
+    let zCol = (isFlagged || Math.abs(zNum) <= 3) ? (isFlagged ? "#d9534f" : "#000") : "#fff";
 
     resultsBody.innerHTML += `
         <tr style="border-bottom: 1px solid #eee;">
             <td style="padding: 10px;">${name}</td>
-            <td><div style="${base} background-color: ${zB}; color: ${zC};"><span>${score}</span>${icon}</div></td>
-            <td><div style="${base} background-color: ${pB}; color: ${pC};">${percentile}</div></td>
-            <td style="padding: 10px; cursor: help;" title="${interp.note}">
-                <span style="${interp.note ? 'border-bottom: 1px dotted #999;' : ''}">${interp.text}</span>
+            <td><div style="padding: 8px; font-weight: bold; border-radius: 4px; background-color: ${zBg}; color: ${zCol}; text-align: center;">
+                ${score} ${isFlagged ? '🚩' : ''}
+            </div></td>
+            <td>${percentile}</td>
+            <td style="padding: 10px; font-size: 0.85em; color: #555;" title="${errorText}">
+                ${isFlagged ? `<strong style="color: #d9534f;">${id === 'bmi' ? 'BAZ' : (jointFlag ? 'HAZ & WAZ' : id.toUpperCase())} Flag</strong>` : ""}
+                <div style="font-size: 0.9em;">${isFlagged ? errorText : getInterpretation(id, score, ageDays).text}</div>
             </td>
         </tr>`;
 }
-
     function zToPercentile(z) {
         if (z === "NA" || isNaN(z) || z < -3 || z > 3) return "NA";
         const zNum = parseFloat(z);
