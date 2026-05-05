@@ -25,7 +25,7 @@
 <body>
 
 <div class="card">
-    <h2 style="text-align: center;">WHOS Growth Standards & Growth Reference Calculator</h2>
+    <h2 style="text-align: center;">WHOS Growth Standards (birth to 60 months), Who Reference 2007 (61 months to 19 years) Calculator</h2>
     
     <div class="row">
         <div>
@@ -107,7 +107,7 @@
         <span>A black background color alerts the user if a resulting z-score is beyond -3 or +3 SD, which is plausible but reflects extreme nutritional status.</span>
     </div>
     <div style="display: flex; align-items: flex-start; margin-bottom: 12px;">
-        <span style="background: #ffcccc; color: #d9534f; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 10px; min-width: 70px; text-align: center;">🚩 Flag</span>
+        <span style="background: #ffcccc; color: #ffffff00; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 10px; min-width: 70px; text-align: center;">🚩 Flag</span>
         <span>Red Flag indicates biologically implausible results. Please check for data-entry errors and, if no error is found, re-measure the child.</span>
     </div>
     <div style="padding: 10px; background-color: #f9f9f9; border-left: 3px solid #0056b3; font-style: italic; color: #555;">
@@ -195,7 +195,7 @@ function getInterpretation(id, z, ageDays) {
         const totalMonths = Math.floor(ageDays / 30.4375);
         const preciseMonths = ageDays / 30.4375;
         
-        document.getElementById('ageDisplay').innerText = `Age: ${Math.floor(totalMonths/12)} yr ${totalMonths%12} mo (${totalMonths} mo)`;
+        document.getElementById('ageDisplay').innerText = `Age: ${Math.floor(totalMonths/12)}yr ${totalMonths%12}mo (${totalMonths}mo)`;
 
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') clenhei += 0.7; 
