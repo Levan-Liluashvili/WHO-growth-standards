@@ -371,6 +371,20 @@ resultsBody.innerHTML += `
     document.getElementById('weight').addEventListener('input', updateBMI);
     document.getElementById('height').addEventListener('input', updateBMI);
     document.getElementById('oedema').addEventListener('change', updateBMI);
+
+    window.addEventListener('DOMContentLoaded', (event) => {
+    const now = new Date();
+    // This handles the timezone offset correctly so it doesn't jump back to yesterday
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    
+    const localDate = `${year}-${month}-${day}`;
+
+    // Update your specific IDs
+    if(document.getElementById('dob')) document.getElementById('dob').value = localDate;
+    if(document.getElementById('dom')) document.getElementById('dom').value = localDate;
+});
 </script>
 </body>
 </html>
