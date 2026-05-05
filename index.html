@@ -25,7 +25,7 @@
 <body>
 
 <div class="card">
-    <h2 style="text-align: center;">WHO Growth Standards & Growth Reference Calculator</h2>
+    <h2 style="text-align: center;">WHOS Growth Standards & Growth Reference Calculator</h2>
     
     <div class="row">
         <div>
@@ -270,45 +270,60 @@ function appendResultRow(name, id, score, percentile, ageDays) {
     const resultsBody = document.getElementById('multi-results');
     const zNum = parseFloat(score);
     
-    const limits = { 
+    const flagLimits = { 
         wfa: { l: -6, h: 5 }, 
         hfa: { l: -6, h: 6 }, 
         bmi: { l: -5, h: 5 } 
     };
 
     let isFlagged = false;
+    let isExtreme = false;
+
     if (score !== 'NA' && !isNaN(zNum)) {
-        const l = limits[id];
-        if (zNum < l.l || zNum > l.h) isFlagged = true;
+        const limits = flagLimits[id];
+        if (zNum < limits.l || zNum > limits.h) isFlagged = true;
+        else if (Math.abs(zNum) > 3) isExtreme = true;
     }
 
-    let interp = (isFlagged || score === 'NA') ? { text: "", note: "" } : getInterpretation(id, score, ageDays);
+    // Determine the Specific Manual Note for Flags
+    let flagNote = "";
+    if (isFlagged) {
+        // Logic for combined HAZ & WAZ flag
+        const hfaScore = parseFloat(document.querySelector('[title*="Height-for-age"]')?.innerText || 0);
+        const wfaScore = parseFloat(document.querySelector('[title*="Weight-for-age"]')?.innerText || 0);
+        
+        if (id === 'hfa' || id === 'wfa') {
+            const hFlag = (hfaScore < -6 || hfaScore > 6);
+            const wFlag = (wfaScore < -6 || wfaScore > 5);
+            
+            if (hFlag && wFlag) {
+                flagNote = "Age information may be incorrect, out of range or missing.";
+            } else if (id === 'hfa') {
+                flagNote = "Extremely short/tall or height data missing. Check height consistency or age.";
+            } else {
+                flagNote = "Either weight or age may be incorrect or missing.";
+            }
+        } else if (id === 'bmi') {
+            flagNote = "This may indicate an unusual combination of WAZ and HAZ.";
+        }
+    }
 
+    let interp = (isFlagged || score === 'NA') ? { text: flagNote, note: "" } : getInterpretation(id, score, ageDays);
+
+    // Visual Style: Black for both Extreme and Implausible
     let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; min-width: 80px; text-align: center;";
-    let zC = "#0056b3", zB = "transparent", pC = "#666", pB = "transparent", icon = "";
+    let zC = "#0056b3", zB = "transparent", icon = "";
 
     if (score !== 'NA' && !isNaN(zNum)) {
-        if (isFlagged) { 
-            zB = "#ffcccc"; zC = "#d9534f"; 
-            pB = "#ffcccc"; pC = "#d9534f"; // Sync Flag color
-            icon = '<span style="margin-left: 5px;">🚩</span>'; 
-        }
-        else if (zNum < -3 || zNum > 3) { 
-            zB = "#333"; zC = "#fff"; 
-            pB = "#333"; pC = "#fff"; // Sync Extreme color
-            icon = '<span style="margin-left: 5px;">⚠️</span>'; 
-        }
-        else if (Math.abs(zNum) > 2) { 
-            zB = "#ff0000"; zC = "#fff"; 
-            pB = "#ff0000"; pC = "#fff"; // Sync Obese/Stunted color
-        }
-        else if (Math.abs(zNum) > 1) { 
-            zB = "#FFD700"; zC = "#000"; 
-            pB = "#FFD700"; pC = "#000"; // Sync Overweight color
-        }
-        else { 
-            zB = "#90EE90"; zC = "#000"; 
-            pB = "#90EE90"; pC = "#000"; // Sync Normal color
+        if (isFlagged || isExtreme) {
+            zB = "#333"; zC = "#fff"; // Black background for both
+            if (isFlagged) icon = '<span style="margin-left: 5px;">🚩</span>';
+        } else if (Math.abs(zNum) > 2) {
+            zB = "#ffcccc"; zC = "#d9534f"; // Light red for clinical cut-offs
+        } else if (Math.abs(zNum) > 1) {
+            zB = "#fff3cd"; zC = "#856404"; // Yellow for risk
+        } else {
+            zB = "#d4edda"; zC = "#155724"; // Green for normal
         }
     }
 
@@ -316,13 +331,12 @@ function appendResultRow(name, id, score, percentile, ageDays) {
         <tr style="border-bottom: 1px solid #eee;">
             <td style="padding: 10px;">${name}</td>
             <td><div style="${base} background-color: ${zB}; color: ${zC};"><span>${score}</span>${icon}</div></td>
-            <td><div style="${base} background-color: ${pB}; color: ${pC};">${percentile}</div></td>
-            <td style="padding: 10px; cursor: help;" title="${interp.note}">
-                <span style="${interp.note ? 'border-bottom: 1px dotted #999;' : ''}">${interp.text}</span>
+            <td><div style="${base} background-color: ${zB}; color: ${zC};">${percentile}</div></td>
+            <td style="padding: 10px; font-size: 0.85em; color: ${isFlagged ? '#d9534f' : '#555'};">
+                ${isFlagged ? "<strong>FLAG: </strong>" + interp.text : interp.text}
             </td>
         </tr>`;
 }
-
     function zToPercentile(z) {
         if (z === "NA" || isNaN(z) || z < -3 || z > 3) return "NA";
         const zNum = parseFloat(z);
