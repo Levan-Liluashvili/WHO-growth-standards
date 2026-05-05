@@ -106,10 +106,10 @@
         <span style="background: #333; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 10px; min-width: 70px; text-align: center;">Extreme</span>
         <span>A black background color alerts the user if a resulting z-score is beyond -3 or +3 SD, which is plausible but reflects extreme nutritional status.</span>
     </div>
-    <div style="display: flex; align-items: flex-start; margin-bottom: 12px;">
-        <span style="background: #ffcccc; color: #d9534f; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 10px; min-width: 70px; text-align: center;">🚩 Flag</span>
-        <span>Red Flag indicates biologically implausible results. Please check for data-entry errors and, if no error is found, re-measure the child.</span>
-    </div>
+<div style="display: flex; align-items: flex-start; margin-bottom: 12px;">
+    <span style="font-size: 1.2em; margin-right: 10px; min-width: 25px; text-align: center;">🚩</span>
+    <span><strong>Flag:</strong> Red Flag indicates biologically implausible results. Please check for data-entry errors and, if no error is found, re-measure the child.</span>
+</div>
     <div style="padding: 10px; background-color: #f9f9f9; border-left: 3px solid #0056b3; font-style: italic; color: #555;">
         <strong>Note for Clinicians:</strong> When evaluating young children, clinicians might even prefer to avoid classifying a child at this age (0-5 years), and focus instead on the individual growth trajectory and the clinical assessment.
     </div>
@@ -195,7 +195,7 @@ function getInterpretation(id, z, ageDays) {
         const totalMonths = Math.floor(ageDays / 30.4375);
         const preciseMonths = ageDays / 30.4375;
         
-        document.getElementById('ageDisplay').innerText = `Age: ${Math.floor(totalMonths/12)} yr${totalMonths%12}mo (${totalMonths}mo)`;
+        document.getElementById('ageDisplay').innerText = `Age: ${Math.floor(totalMonths/12)}yr ${totalMonths%12}mo (${totalMonths}mo)`;
 
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') clenhei += 0.7; 
@@ -309,12 +309,10 @@ function appendResultRow(name, id, score, percentile, ageDays) {
     }
 
     let interp = (isFlagged || score === 'NA') ? { text: flagNote, note: "" } : getInterpretation(id, score, ageDays);
-    let displayStatus = "";
-    if (isFlagged) {
-        displayStatus = `<span style="color: #d9534f; font-weight: bold;">🚩 ${flagNote}</span>`;
-    } else {
-        displayStatus = `<strong>${interp.text}</strong>`;
-    }
+
+    let displayStatus = isFlagged ? 
+        `<span style="color: #d9534f; font-weight: bold;">🚩 ${flagNote}</span>` : 
+        `<strong>${interp.text}</strong>`;
 
     // Visual Style: Black for both Extreme and Implausible
     let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; min-width: 80px; text-align: center;";
