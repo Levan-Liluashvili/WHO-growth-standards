@@ -25,7 +25,7 @@
 <body>
 
 <div class="card">
-    <h2 style="text-align: center;">WHOS Growth Standards & Growth Reference Calculator</h2>
+    <h2 style="text-align: center;">WHO Growth Standards (0-60 months) & WHO Growth Reference (61 months to 19 years) Calculator</h2>
     
     <div class="row">
         <div>
@@ -195,7 +195,7 @@ function getInterpretation(id, z, ageDays) {
         const totalMonths = Math.floor(ageDays / 30.4375);
         const preciseMonths = ageDays / 30.4375;
         
-        document.getElementById('ageDisplay').innerText = `Age: ${Math.floor(totalMonths/12)} yr ${totalMonths%12} mo (${totalMonths} mo)`;
+        document.getElementById('ageDisplay').innerText = `Age: ${Math.floor(totalMonths/12)} yr${totalMonths%12}mo (${totalMonths}mo)`;
 
         let clenhei = height;
         if (ageDays < 731 && measure === 'H') clenhei += 0.7; 
@@ -309,6 +309,12 @@ function appendResultRow(name, id, score, percentile, ageDays) {
     }
 
     let interp = (isFlagged || score === 'NA') ? { text: flagNote, note: "" } : getInterpretation(id, score, ageDays);
+    let displayStatus = "";
+    if (isFlagged) {
+        displayStatus = `<span style="color: #d9534f; font-weight: bold;">🚩 ${flagNote}</span>`;
+    } else {
+        displayStatus = `<strong>${interp.text}</strong>`;
+    }
 
     // Visual Style: Black for both Extreme and Implausible
     let base = "padding: 8px 12px; font-weight: bold; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; min-width: 80px; text-align: center;";
@@ -327,13 +333,13 @@ function appendResultRow(name, id, score, percentile, ageDays) {
         }
     }
 
-    resultsBody.innerHTML += `
+resultsBody.innerHTML += `
         <tr style="border-bottom: 1px solid #eee;">
             <td style="padding: 10px;">${name}</td>
-            <td><div style="${base} background-color: ${zB}; color: ${zC};"><span>${score}</span>${icon}</div></td>
+            <td><div style="${base} background-color: ${zB}; color: ${zC};">${score}</div></td>
             <td><div style="${base} background-color: ${zB}; color: ${zC};">${percentile}</div></td>
-            <td style="padding: 10px; font-size: 0.85em; color: ${isFlagged ? '#d9534f' : '#555'};">
-                ${isFlagged ? "<strong>FLAG: </strong>" + interp.text : interp.text}
+            <td style="padding: 10px; font-size: 0.85em;">
+                ${displayStatus} 
             </td>
         </tr>`;
 }
