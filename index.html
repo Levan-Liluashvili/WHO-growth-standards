@@ -27,7 +27,7 @@
 <div class="card">
     <h2 style="text-align: center;">WHO Growth Standards (0-60 months) & WHO Growth Reference (61 months to 19 years) Calculator</h2>
     
-    <div class="row">
+ <div class="row">
         <div>
             <label>Sex</label>
             <select id="sex">
@@ -57,11 +57,8 @@
 
     <div class="row">
         <div>
-            <label>Measurement Type</label>
-            <select id="measure">
-                <option value="H" selected>H (Standing Height)</option>
-                <option value="L">L (Recumbent Length)</option>
-            </select>
+            <label>Height/Length (cm)</label>
+            <input type="number" id="height" step="0.1" placeholder="e.g. 85.5">
         </div>
         <div>
             <label>Weight (kg)</label>
@@ -71,8 +68,11 @@
 
     <div class="row">
         <div>
-            <label>Height/Length (cm)</label>
-            <input type="number" id="height" step="0.1" placeholder="e.g. 85.5">
+            <label>Measurement Type</label>
+            <select id="measure">
+                <option value="H" selected>H (Standing Height)</option>
+                <option value="L">L (Recumbent Length)</option>
+            </select>
         </div>
         <div style="visibility: hidden;">
             <label>Spacer</label><input type="text">
