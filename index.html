@@ -333,7 +333,7 @@ function appendResultRow(name, id, score, percentile, ageDays) {
         const h = parseFloat(document.getElementById('height').value);
         const o = document.getElementById('oedema').value;
         const d = document.getElementById('bmiDisplay');
-        if (!isNaN(w) && !isNaN(h) && h > 0 && o !== 'y') d.innerText = `BMI: ${(w / Math.pow(h / 100, 2)).toFixed(2)}`;
+        if (!isNaN(w) && !isNaN(h) && h > 0 && o !== 'y') d.innerText = `BMI: ${(w / Math.pow(h / 100, 2)).toFixed(1)}`;
         else d.innerText = "";
     }
     document.getElementById('weight').addEventListener('input', updateBMI);
