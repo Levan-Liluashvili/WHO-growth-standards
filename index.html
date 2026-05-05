@@ -15,6 +15,11 @@
         button:hover { background: #0056b3; }
         #result { margin-top: 25px; padding: 20px; border-radius: 8px; background: #f8f9fa; border-left: 6px solid #007bff; }
         .info-bar { margin-top: 15px; display: flex; justify-content: space-between; font-weight: bold; color: #0056b3; min-height: 1.2em; }
+    @media (max-width: 600px) {
+            .row { flex-direction: column; gap: 10px; }
+            body { margin: 10px; padding: 10px; max-width: 100%; }
+            .card { padding: 15px; }
+        }
     </style>
 </head>
 <body>
