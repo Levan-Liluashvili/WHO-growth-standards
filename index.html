@@ -364,17 +364,41 @@ resultsBody.innerHTML += `
         return (p * 100).toFixed(1) + "th";
     }
 
-    function updateBMI() {
-        const w = parseFloat(document.getElementById('weight').value);
-        const h = parseFloat(document.getElementById('height').value);
-        const o = document.getElementById('oedema').value;
-        const d = document.getElementById('bmiDisplay');
-        if (!isNaN(w) && !isNaN(h) && h > 0 && o !== 'y') d.innerText = `BMI: ${(w / Math.pow(h / 100, 2)).toFixed(1)}`;
-        else d.innerText = "";
+function updateBMI() {
+    const w = parseFloat(document.getElementById('weight').value);
+    const h = parseFloat(document.getElementById('height').value);
+    const o = document.getElementById('oedema').value;
+    const measure = document.getElementById('measure').value;
+    const dob = new Date(document.getElementById('dob').value);
+    const dom = new Date(document.getElementById('dom').value);
+    const d = document.getElementById('bmiDisplay');
+
+    if (!isNaN(w) && !isNaN(h) && h > 0 && o !== 'y' &&
+        !isNaN(dob) && !isNaN(dom)) {
+
+        const ageDays = Math.round((dom - dob) / (1000 * 60 * 60 * 24));
+
+        let clenhei = h;
+
+        if (ageDays < 731 && measure === 'H') {
+            clenhei += 0.7;
+        } else if (ageDays >= 731 && measure === 'L') {
+            clenhei -= 0.7;
+        }
+
+        const bmi = w / Math.pow(clenhei / 100, 2);
+
+        d.innerText = `BMI: ${bmi.toFixed(1)}`;
+    } else {
+        d.innerText = "";
     }
-    document.getElementById('weight').addEventListener('input', updateBMI);
-    document.getElementById('height').addEventListener('input', updateBMI);
-    document.getElementById('oedema').addEventListener('change', updateBMI);
+}
+document.getElementById('weight').addEventListener('input', updateBMI);
+document.getElementById('height').addEventListener('input', updateBMI);
+document.getElementById('oedema').addEventListener('change', updateBMI);
+document.getElementById('dob').addEventListener('change', updateBMI);
+document.getElementById('dom').addEventListener('change', updateBMI);
+document.getElementById('measure').addEventListener('change', updateBMI);
 
 </script>
 </body>
